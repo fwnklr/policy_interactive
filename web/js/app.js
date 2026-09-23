@@ -30,7 +30,7 @@ let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, so
 let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg}, dirty } working copy of a baseline
 let dragOrig = null;
 let brush = "2";       // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
-const EDIT_VARS = ["rff", "pic4", "lur"];   // variable behind each chart panel
+const EDIT_VARS = ["rff", "pic4", "lur", "xgap2"];   // variable behind each chart panel
 
 // ---------- state <-> URL hash (shareable scenarios) ----------
 function readHash() {
@@ -292,11 +292,17 @@ function render(s, n, t0, base, Y) {
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
     },
+    {
+      series: [
+        { label: "Potential", values: proj(idx.map(() => 0)), cls: "ref" },
+        { label: blLabel, values: bl("xgap2"), cls: "base" },
+        { label: "Counterfactual", values: cf("xgap2"), cls: "cf" },
+      ],
+    },
   ];
   charts.update({ labels, panels, markIndex });
   $("proj-note").textContent =
     `Shaded: data before the ${s.vintage} SEP. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
-  renderTable(labels, panels);
   return { labels, panels, s };
 }
 
@@ -392,6 +398,7 @@ function renderEdit() {
     mk("rff", { label: "Long-run rate", values: lr }),
     mk("pic4", { label: "Target", values: get(cur, "pitarg") }),
     mk("lur", { label: "Natural rate", values: get(cur, "lurnat") }),
+    mk("xgap2", { label: "Potential", values: idx.map(() => 0) }),
   ];
   const status = $("status");
   status.textContent = edits.dirty
@@ -401,7 +408,6 @@ function renderEdit() {
   $("proj-note").textContent = `Shaded: data before the ${s.vintage} SEP. Only projected quarters can be edited.`;
   charts.update({ labels, panels, markIndex, editable: true });
   lastResult = { labels, panels, s };
-  renderTable(labels, panels);
 }
 
 function setMode(m) {
@@ -414,30 +420,10 @@ function setMode(m) {
   schedule();
 }
 
-function renderTable(labels, panels) {
-  const names = ["Fed funds rate", "Inflation", "Unemployment rate"];
-  const cols = [];
-  panels.forEach((p, k) => p.series.forEach((ser) => cols.push({ name: `${names[k]}: ${ser.label}`, values: ser.values })));
-  const table = $("data-table");
-  table.replaceChildren();
-  const thead = table.createTHead().insertRow();
-  for (const h of ["Quarter", ...cols.map((c) => c.name)]) {
-    const th = document.createElement("th");
-    th.textContent = h;
-    thead.appendChild(th);
-  }
-  const tb = table.createTBody();
-  labels.forEach((l, i) => {
-    const r = tb.insertRow();
-    r.insertCell().textContent = l;
-    for (const c of cols) r.insertCell().textContent = c.values[i] == null ? "" : c.values[i].toFixed(2);
-  });
-}
-
 function downloadCsv() {
   if (!lastResult) return;
   const { labels, panels, s } = lastResult;
-  const names = ["rff", "inflation", "unemployment"];
+  const names = ["rff", "inflation", "unemployment", "output gap"];
   const cols = [];
   panels.forEach((p, k) => p.series.forEach((ser) => cols.push({ name: `${names[k]} ${ser.label}`, values: ser.values })));
   const lines = [
@@ -471,6 +457,7 @@ async function main() {
     { title: "Federal funds rate (%)" },
     { title: "Inflation, 4-quarter PCE (%)" },
     { title: "Unemployment rate (%)" },
+    { title: "Output gap (% of potential)" },
   ], { onDragStart, onDrag });
   buildControls();
   state = readHash();

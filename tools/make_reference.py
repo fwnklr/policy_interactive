@@ -27,7 +27,7 @@ from irfoc.modelsolver import ModelSolver, PolicyMap  # noqa: E402
 DATA = os.path.join(REPO, "web", "data")
 OUT = os.path.join(HERE, "test", "reference.json")
 
-VARS = ["pic4", "rff", "lur", "lurnat", "lagrff", "lag4lur", "elb", "rstar", "pitarg"]
+VARS = ["pic4", "rff", "lur", "lurnat", "xgap2", "lagrff", "lag4lur", "elb", "rstar", "pitarg"]
 vj = {v: i for i, v in enumerate(VARS)}
 J = len(VARS)
 T_RULE_ELB = 80  # rules: ELB imposed over the first 80 quarters (as in oc_solve.py)
@@ -159,7 +159,7 @@ def main():
                             "model": model, "vintage": vlab, "policy": policy, "name": name,
                             "params": p, "use_elb": use_elb, "elb": elb,
                             "converged": bool(flag[0]),
-                            "Y": {v: Y[vj[v], sl].tolist() for v in ["rff", "pic4", "lur", "lurnat"]},
+                            "Y": {v: Y[vj[v], sl].tolist() for v in ["rff", "pic4", "lur", "lurnat", "xgap2"]},
                         })
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:

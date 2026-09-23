@@ -29,8 +29,8 @@ from irfoc.io_mat import load_dynare_results, load_tb_data  # noqa: E402
 
 OUT = os.path.join(REPO, "web", "data")
 T = 200
-MVARS = ["pic4", "rff", "lur", "lurnat"]
-BVARS = ["rff", "pic4", "lur", "lurnat", "rstar", "pitarg"]
+MVARS = ["pic4", "rff", "lur", "lurnat", "xgap2"]
+BVARS = ["rff", "pic4", "lur", "lurnat", "xgap2", "rstar", "pitarg"]
 
 MODELS = {
     "linver_mcapwp": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER)"},

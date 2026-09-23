@@ -4,13 +4,15 @@
   "pic4",
   "rff",
   "lur",
-  "lurnat"
+  "lurnat",
+  "xgap2"
  ],
  "bvars": [
   "rff",
   "pic4",
   "lur",
   "lurnat",
+  "xgap2",
   "rstar",
   "pitarg"
  ],

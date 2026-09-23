@@ -11,7 +11,7 @@ import { mat, matmul, matTdiagMul, matvec, matTvec, lu, luSolve, rightDivide } f
 import { solveLCP } from "./lcp.js";
 
 export const T_RULE_ELB = 80;   // rules: ELB imposed over the first 80 quarters (as in the paper)
-export const OUTPUT_VARS = ["rff", "pic4", "lur", "lurnat"];
+export const OUTPUT_VARS = ["rff", "pic4", "lur", "lurnat", "xgap2"];
 
 function shiftRows(A, k) {
   const B = mat(A.r, A.c);
