@@ -15,6 +15,9 @@ const LOSS_PRESETS = {
   inflation: { label: "Inflation focus", lam_u: 0, lam_dr: 0.01 },
 };
 const LAM_U_STOPS = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
+// Below ~0.95 the weight on distant quarters is so small (0.9^200 ~ 1e-9) that the far future is
+// not pinned down and the optimal-control paths explode.
+const BETA_STOPS = [0.95, 0.98, 0.99, 0.9963, 0.9999];
 const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 const DEFAULT = {
@@ -47,7 +50,7 @@ function readHash() {
   if (!["rule", "commitment"].includes(s.policy)) s.policy = DEFAULT.policy;
   s.lam_u = nearest(LAM_U_STOPS, s.lam_u);
   s.lam_dr = nearest(LAM_DR_STOPS, s.lam_dr);
-  s.beta = Math.min(0.9995, Math.max(0.95, s.beta));
+  s.beta = nearest(BETA_STOPS, s.beta);
   return s;
 }
 
@@ -103,14 +106,19 @@ function buildControls() {
   vintage.addEventListener("change", () => set({ vintage: vintage.value }));
   document.querySelectorAll("input[name=policy]").forEach((r) =>
     r.addEventListener("change", () => set({ policy: r.value })));
-  for (const k of ["rho", "phi_pi", "phi_u", "phi_du"]) {
-    $(k).addEventListener("input", () => set({ [k]: Number($(k).value) }));
-  }
+  // Sliders: the label follows the thumb while dragging; the scenario is recomputed on release.
+  const onRelease = (id, toValue) => {
+    const el = $(id);
+    el.addEventListener("input", () => { $(`${id}-out`).textContent = String(Number(toValue(el.value).toFixed(3))); });
+    el.addEventListener("change", () => set({ [id]: toValue(el.value) }));
+  };
+  for (const k of ["rho", "phi_pi", "phi_u", "phi_du"]) onRelease(k, Number);
   $("lam_u").max = LAM_U_STOPS.length - 1;
   $("lam_dr").max = LAM_DR_STOPS.length - 1;
-  $("lam_u").addEventListener("input", () => set({ lam_u: LAM_U_STOPS[$("lam_u").value] }));
-  $("lam_dr").addEventListener("input", () => set({ lam_dr: LAM_DR_STOPS[$("lam_dr").value] }));
-  $("beta").addEventListener("input", () => set({ beta: Number($("beta").value) }));
+  onRelease("lam_u", (i) => LAM_U_STOPS[i]);
+  onRelease("lam_dr", (i) => LAM_DR_STOPS[i]);
+  $("beta").max = BETA_STOPS.length - 1;
+  onRelease("beta", (i) => BETA_STOPS[i]);
   $("elb_on").addEventListener("change", () => set({ elb_on: $("elb_on").checked }));
   $("years").addEventListener("change", () => set({ years: Number($("years").value) }));
   $("reset").addEventListener("click", () => { edits = null; setMode("cf"); set({ ...DEFAULT }); });
@@ -160,8 +168,8 @@ function syncControls() {
   $("lam_dr").value = LAM_DR_STOPS.indexOf(state.lam_dr);
   $("lam_u-out").textContent = state.lam_u;
   $("lam_dr-out").textContent = state.lam_dr;
-  $("beta").value = state.beta;
-  $("beta-out").textContent = state.beta.toFixed(4);
+  $("beta").value = BETA_STOPS.indexOf(state.beta);
+  $("beta-out").textContent = state.beta;
   $("loss-presets").querySelectorAll("button").forEach((b) => {
     const p = LOSS_PRESETS[b.dataset.preset];
     b.setAttribute("aria-pressed", p.lam_u === state.lam_u && p.lam_dr === state.lam_dr);
@@ -237,7 +245,9 @@ async function run() {
 
   const bad = Object.values(out.Y).some((a) => a.some((v) => !Number.isFinite(v) || Math.abs(v) > 1e3));
   if (bad) {
-    status.textContent = "These settings produce an explosive path. Try a stronger response to inflation.";
+    status.textContent = s.policy === "rule"
+      ? "These settings produce an explosive path. Try a stronger response to inflation."
+      : "These settings produce an explosive path. Try a higher discount factor or a larger rate-change weight.";
     status.dataset.kind = "error";
     return;
   }
