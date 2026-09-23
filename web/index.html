@@ -76,17 +76,14 @@
           <span><span>Rate-change weight λ<sub>Δr</sub></span> <output id="lam_dr-out"></output></span>
           <input type="range" id="lam_dr" min="0" step="1">
         </label>
-        <label class="slider">
-          <span><span>Discount factor β</span> <output id="beta-out"></output></span>
-          <input type="range" id="beta" min="0" step="1">
-        </label>
-        <p class="hint">Weight on inflation normalized to 1. The policymaker optimizes at the SEP date
+        <p class="hint">Weight on inflation normalized to 1; discount factor β = 0.9963. The policymaker optimizes at the SEP date
           under commitment: a path for the funds rate that is never revisited.</p>
       </div>
     </section>
 
     <section id="elb-section">
-      <label class="check"><input type="checkbox" id="elb_on"> Enforce the effective lower bound (0.125%)</label>
+      <label class="check"><input type="checkbox" id="elb_on"> Enforce the effective lower bound</label>
+      <p class="hint">The lower bound is 0.125%.</p>
     </section>
 
     <section id="edit-section" hidden>
