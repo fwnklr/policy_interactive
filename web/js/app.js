@@ -20,7 +20,7 @@ const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 const DEFAULT = {
   model: "linver_mcapwp", vintage: "2020:Q2", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
-  lam_u: 1, lam_dr: 1,
+  lam_u: 1, lam_dr: 1, beta: 0.9963,
   elb_on: true, years: 6,
 };
 
@@ -47,6 +47,7 @@ function readHash() {
   if (!["rule", "commitment"].includes(s.policy)) s.policy = DEFAULT.policy;
   s.lam_u = nearest(LAM_U_STOPS, s.lam_u);
   s.lam_dr = nearest(LAM_DR_STOPS, s.lam_dr);
+  s.beta = Math.min(0.9995, Math.max(0.95, s.beta));
   return s;
 }
 
@@ -109,6 +110,7 @@ function buildControls() {
   $("lam_dr").max = LAM_DR_STOPS.length - 1;
   $("lam_u").addEventListener("input", () => set({ lam_u: LAM_U_STOPS[$("lam_u").value] }));
   $("lam_dr").addEventListener("input", () => set({ lam_dr: LAM_DR_STOPS[$("lam_dr").value] }));
+  $("beta").addEventListener("input", () => set({ beta: Number($("beta").value) }));
   $("elb_on").addEventListener("change", () => set({ elb_on: $("elb_on").checked }));
   $("years").addEventListener("change", () => set({ years: Number($("years").value) }));
   $("reset").addEventListener("click", () => { edits = null; setMode("cf"); set({ ...DEFAULT }); });
@@ -158,6 +160,8 @@ function syncControls() {
   $("lam_dr").value = LAM_DR_STOPS.indexOf(state.lam_dr);
   $("lam_u-out").textContent = state.lam_u;
   $("lam_dr-out").textContent = state.lam_dr;
+  $("beta").value = state.beta;
+  $("beta-out").textContent = state.beta.toFixed(4);
   $("loss-presets").querySelectorAll("button").forEach((b) => {
     const p = LOSS_PRESETS[b.dataset.preset];
     b.setAttribute("aria-pressed", p.lam_u === state.lam_u && p.lam_dr === state.lam_dr);
@@ -216,7 +220,7 @@ async function run() {
   const yb = baselineWindow(base, t0, meta.T);
   const policy = s.policy === "rule"
     ? { type: "rule", rho: s.rho, phi_pi: s.phi_pi, phi_u: s.phi_u, phi_du: s.phi_du }
-    : { type: "commitment", lam_u: s.lam_u, lam_dr: s.lam_dr };
+    : { type: "commitment", lam_u: s.lam_u, lam_dr: s.lam_dr, beta: s.beta };
 
   let out;
   const t = performance.now();

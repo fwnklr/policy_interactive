@@ -35,27 +35,32 @@ export function prepareModel(T, Mraw, beta) {
   const M = { ...Mraw };
   M.lagrff = shiftRows(M.rff, 1);
   M.lag4lur = shiftRows(M.lur, 4);
-  const disc = Float64Array.from({ length: T }, (_, t) => beta ** t);
   // Loss-term Jacobians: inflation gap, unemployment gap, change in the policy rate.
   const L = {
     pi: M.pic4,
     u: lincomb([[1, M.lur], [-1, M.lurnat]], T, T),
     dr: lincomb([[1, M.rff], [-1, M.lagrff]], T, T),
   };
-  return { T, M, L, disc, beta, gram: null };
+  return { T, M, L, beta, grams: new Map() };
 }
 
-function grams(model) {
-  if (!model.gram) {
-    const { L, disc } = model;
-    model.gram = {
+// Discount factors and Gram matrices depend on beta; cache a few values (slider dragging).
+function grams(model, beta) {
+  let g = model.grams.get(beta);
+  if (!g) {
+    const { L } = model;
+    const disc = Float64Array.from({ length: model.T }, (_, t) => beta ** t);
+    g = {
+      disc,
       pi: matTdiagMul(L.pi, disc, L.pi),
       u: matTdiagMul(L.u, disc, L.u),
       dr: matTdiagMul(L.dr, disc, L.dr),
       PuC: matTdiagMul(model.M.rff, disc, identity(model.T)),   // M_rff' B
     };
+    if (model.grams.size >= 12) model.grams.delete(model.grams.keys().next().value);
+    model.grams.set(beta, g);
   }
-  return model.gram;
+  return g;
 }
 
 function identity(n) {
@@ -90,8 +95,9 @@ function ruleSystem(model, yb, p) {
 }
 
 function commitmentSystem(model, yb, p) {
-  const { T, L, disc } = model;
-  const g = grams(model);
+  const { T, L } = model;
+  const g = grams(model, p.beta ?? model.beta);
+  const disc = g.disc;
   const lam = { pi: 1, u: p.lam_u, dr: p.lam_dr };
   const G = lincomb(Object.entries(lam).map(([k, w]) => [w, g[k]]), T, T);
   const gap = { pi: sub(yb.pic4, yb.pitarg), u: sub(yb.lur, yb.lurnat), dr: sub(yb.rff, yb.lagrff) };

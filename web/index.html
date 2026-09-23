@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Policy Counterfactuals</title>
-<meta name="description" content="Interactive monetary policy counterfactuals in sequence space: simple rules and optimal commitment around Fed SEP baselines, with an effective lower bound.">
+<meta name="description" content="Interactive monetary policy counterfactuals in sequence space: simple rules and optimal control around Fed SEP baselines, with an effective lower bound.">
 <link rel="stylesheet" href="css/style.css">
 <script type="module" src="js/app.js"></script>
 </head>
@@ -12,7 +12,7 @@
 <header class="site">
   <h1>Policy counterfactuals</h1>
   <p class="lede">What would the economy have looked like under a different monetary policy? Pick an SEP
-    baseline and a model, then choose a policy rule or optimal commitment. Each counterfactual is
+    baseline and a model, then choose a policy rule or optimal control. Each counterfactual is
     computed in your browser.</p>
   <fieldset class="segmented modes">
     <legend class="sr">Mode</legend>
@@ -36,7 +36,7 @@
       <fieldset class="segmented">
         <legend>Policy</legend>
         <label><input type="radio" name="policy" value="rule"> Simple rule</label>
-        <label><input type="radio" name="policy" value="commitment"> Optimal commitment</label>
+        <label><input type="radio" name="policy" value="commitment"> Optimal control</label>
       </fieldset>
 
       <div id="rule-controls">
@@ -76,8 +76,12 @@
           <span><span>Rate-change weight λ<sub>Δr</sub></span> <output id="lam_dr-out"></output></span>
           <input type="range" id="lam_dr" min="0" step="1">
         </label>
-        <p class="hint">Weight on inflation normalized to 1; β = 0.9963. The policymaker commits at the
-          SEP date to a path for the funds rate.</p>
+        <label class="slider">
+          <span><span>Discount factor β</span> <output id="beta-out"></output></span>
+          <input type="range" id="beta" min="0.95" max="0.9995" step="0.0001">
+        </label>
+        <p class="hint">Weight on inflation normalized to 1. The policymaker optimizes at the SEP date
+          under commitment: a path for the funds rate that is never revisited.</p>
       </div>
     </section>
 
@@ -140,7 +144,7 @@
   <p>Each model is summarized by its responses to anticipated ("news") monetary policy shocks in every
     future quarter. Stacked together, these impulse responses map any path of policy shocks into paths
     for the economy: <i>y</i> = <i>ȳ</i> + <i>M x</i>, where <i>ȳ</i> is the SEP baseline. A policy rule
-    or the first-order conditions of optimal commitment pin down the shocks <i>x</i> that implement that
+    or the first-order conditions of optimal control under commitment pin down the shocks <i>x</i> that implement that
     policy against the baseline. The effective lower bound turns this into a linear complementarity
     problem, solved exactly. The counterfactual starts in the quarter of the SEP release; earlier
     quarters are data.</p>
