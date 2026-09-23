@@ -154,9 +154,6 @@ function syncControls() {
   const match = (p) => ["rho", "phi_pi", "phi_u", "phi_du"].every((k) => Math.abs(p[k] - state[k]) < 1e-9);
   $("rule-presets").querySelectorAll("button").forEach((b) =>
     b.setAttribute("aria-pressed", match(RULE_PRESETS[b.dataset.preset])));
-  $("rule-longrun").textContent = state.rho < 1
-    ? `Long-run response: inflation ${(state.phi_pi / (1 - state.rho)).toFixed(2)}, unemployment gap ${(state.phi_u / (1 - state.rho)).toFixed(2)}`
-    : "ρ = 1: the rule sets the change in the rate.";
 
   $("lam_u").value = LAM_U_STOPS.indexOf(state.lam_u);
   $("lam_dr").value = LAM_DR_STOPS.indexOf(state.lam_dr);
