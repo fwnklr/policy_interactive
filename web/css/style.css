@@ -234,3 +234,19 @@ body.busy .charts { opacity: 0.6; }
 .about p { max-width: 78ch; }
 .about a { color: var(--accent); }
 .cite { font-size: 0.85rem; }
+
+/* ---------- edit mode ---------- */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.segmented.modes { margin: 14px 0 0; max-width: 420px; }
+.hint.first { margin-top: 0; }
+.sub { font-size: 0.85rem; color: var(--ink-2); margin: 12px 0 4px; }
+.levels { display: grid; gap: 6px; }
+.levels label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.88rem; }
+.levels input {
+  width: 5.5em; font: inherit; color: var(--ink); background: var(--page);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; text-align: right;
+}
+#reset-base { margin-top: 10px; }
+.editable .hit { cursor: ns-resize; }
+.editable svg { touch-action: none; }
+.editable .panel { outline: 1px dashed var(--accent); outline-offset: -1px; }

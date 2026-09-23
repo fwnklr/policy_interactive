@@ -28,8 +28,11 @@ function fmt(v, digits = 2) {
 }
 
 export class LinkedCharts {
-  constructor(root, specs) {
+  constructor(root, specs, handlers = {}) {
     this.root = root;
+    this.handlers = handlers;
+    this.drag = null;
+    this.freeze = null;
     this.panels = specs.map((spec) => {
       const wrap = document.createElement("figure");
       wrap.className = "panel";
@@ -58,6 +61,7 @@ export class LinkedCharts {
 
   update(data) {
     this.data = data;
+    this.root.classList.toggle("editable", !!data.editable);
     this.#draw();
   }
 
@@ -82,10 +86,11 @@ export class LinkedCharts {
       const step = niceStep(hi - lo, H < 180 ? 3 : 4);
       lo = Math.floor(lo / step) * step;
       hi = Math.ceil(hi / step) * step;
+      if (this.freeze?.[k]) ({ lo, hi } = this.freeze[k]);   // fixed axis while dragging
 
       const x = (i) => M.left + (i / (n - 1)) * (W - M.left - M.right);
       const y = (v) => M.top + (1 - (v - lo) / (hi - lo)) * (H - M.top - M.bottom);
-      p.scale = { x, y, W, H, n };
+      p.scale = { x, y, W, H, n, lo, hi };
 
       // history wash + projection start rule
       if (markIndex > 0) {
@@ -158,8 +163,56 @@ export class LinkedCharts {
       const i = Math.round(((px - M.left) / (W - M.left - M.right)) * (n - 1));
       this.#showHover(Math.max(0, Math.min(n - 1, i)), p);
     };
-    p.svg.addEventListener("pointermove", move);
-    p.svg.addEventListener("pointerdown", move);
+    const valueAt = (ev) => {
+      const r = p.svg.getBoundingClientRect();
+      const py = ((ev.clientY - r.top) / r.height) * p.scale.H;
+      const { lo, hi, H } = p.scale;
+      return { py, v: lo + (1 - (py - M.top) / (H - M.top - M.bottom)) * (hi - lo) };
+    };
+    const pointerIndex = (ev) => {
+      const r = p.svg.getBoundingClientRect();
+      const px = ((ev.clientX - r.left) / r.width) * p.scale.W;
+      const { n, W } = p.scale;
+      return Math.max(0, Math.min(n - 1, Math.round(((px - M.left) / (W - M.left - M.right)) * (n - 1))));
+    };
+    p.svg.addEventListener("pointermove", (ev) => {
+      if (this.drag && this.drag.p === p) {
+        const dv = valueAt(ev).v - this.drag.v0;
+        this.handlers.onDrag?.(this.panels.indexOf(p), this.drag.i, dv);
+        return;
+      }
+      move(ev);
+    });
+    p.svg.addEventListener("pointerdown", (ev) => {
+      move(ev);
+      const d = this.data;
+      if (!d?.editable || !p.scale) return;
+      const k = this.panels.indexOf(p);
+      const i = pointerIndex(ev);
+      const s = d.panels[k].series[d.panels[k].editIdx];
+      const val = s?.values[i];
+      if (i < d.markIndex || val == null) return;
+      const { py, v } = valueAt(ev);
+      if (Math.abs(py - p.scale.y(val)) > 30) return;    // must grab near the line
+      this.drag = { p, i, v0: v };
+      this.freeze = this.panels.map((q) => {
+        if (!q.scale) return null;
+        const pad = (q.scale.hi - q.scale.lo) * 0.3;
+        return { lo: q.scale.lo - pad, hi: q.scale.hi + pad };
+      });
+      p.svg.setPointerCapture(ev.pointerId);
+      this.handlers.onDragStart?.(k, i);
+      this.#draw();
+    });
+    const end = () => {
+      if (!this.drag) return;
+      this.drag = null;
+      this.freeze = null;
+      this.handlers.onDragEnd?.();
+      this.#draw();
+    };
+    p.svg.addEventListener("pointerup", end);
+    p.svg.addEventListener("pointercancel", end);
     p.svg.addEventListener("pointerleave", () => this.#hideHover());
     p.svg.addEventListener("blur", () => this.#hideHover());
     p.svg.addEventListener("keydown", (ev) => {

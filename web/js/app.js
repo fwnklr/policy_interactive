@@ -21,11 +21,15 @@ const DEFAULT = {
   model: "linver_mcapwp", vintage: "2020:Q2", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
   lam_u: 1, lam_dr: 1,
-  elb_on: true, elb: 0.125, years: 6,
+  elb_on: true, years: 6,
 };
 
 const $ = (id) => document.getElementById(id);
 let meta, baselines, charts, state, pending = false, lastResult = null;
+let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, solver off)
+let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg}, dirty } working copy of a baseline
+let dragOrig = null;
+const EDIT_VARS = ["rff", "pic4", "lur"];   // variable behind each chart panel
 
 // ---------- state <-> URL hash (shareable scenarios) ----------
 function readHash() {
@@ -105,9 +109,14 @@ function buildControls() {
   $("lam_u").addEventListener("input", () => set({ lam_u: LAM_U_STOPS[$("lam_u").value] }));
   $("lam_dr").addEventListener("input", () => set({ lam_dr: LAM_DR_STOPS[$("lam_dr").value] }));
   $("elb_on").addEventListener("change", () => set({ elb_on: $("elb_on").checked }));
-  $("elb").addEventListener("input", () => set({ elb: Number($("elb").value) }));
   $("years").addEventListener("change", () => set({ years: Number($("years").value) }));
-  $("reset").addEventListener("click", () => set({ ...DEFAULT }));
+  $("reset").addEventListener("click", () => { edits = null; setMode("cf"); set({ ...DEFAULT }); });
+  document.querySelectorAll("input[name=mode]").forEach((r) =>
+    r.addEventListener("change", () => setMode(r.value)));
+  $("reset-base").addEventListener("click", () => { edits = null; ensureEdits(); renderEdit(); syncEditPanel(); });
+  for (const k of ["pistar", "ustar", "rstar"]) {
+    $(k).addEventListener("change", () => setLevel(k, Number($(k).value)));
+  }
   $("download").addEventListener("click", downloadCsv);
   $("copy-link").addEventListener("click", async () => {
     const b = $("copy-link");
@@ -149,13 +158,16 @@ function syncControls() {
   });
 
   $("elb_on").checked = state.elb_on;
-  $("elb").value = state.elb;
-  $("elb").disabled = !state.elb_on;
-  $("elb-out").textContent = String(Number(state.elb.toFixed(3)));
   $("years").value = state.years;
 }
 
 function set(patch) {
+  if (patch.vintage && patch.vintage !== state.vintage && edits?.dirty &&
+      !confirm("Changing the baseline discards your edits. Continue?")) {
+    syncControls();
+    return;
+  }
+  if (patch.vintage && patch.vintage !== state.vintage) edits = null;
   state = { ...state, ...patch };
   syncControls();
   writeHash();
@@ -166,10 +178,10 @@ function set(patch) {
 function schedule() {
   if (pending) return;
   pending = true;
-  requestAnimationFrame(async () => {
+  setTimeout(async () => {   // batches bursts of slider events; unlike rAF it also runs in background tabs
     pending = false;
     await run();
-  });
+  }, 0);
 }
 
 async function run() {
@@ -187,7 +199,14 @@ async function run() {
 
   const n = meta.vintages.findIndex((v) => v.label === s.vintage);
   const t0 = meta.vintages[n].t0;
-  const base = baselines[n];
+  if (mode === "edit") {
+    document.body.classList.remove("busy");
+    ensureEdits();
+    syncEditPanel();
+    renderEdit();
+    return;
+  }
+  const base = edits ? edits.base : baselines[n];
   const yb = baselineWindow(base, t0, meta.T);
   const policy = s.policy === "rule"
     ? { type: "rule", rho: s.rho, phi_pi: s.phi_pi, phi_u: s.phi_u, phi_du: s.phi_du }
@@ -196,7 +215,7 @@ async function run() {
   let out;
   const t = performance.now();
   try {
-    out = solve(model, yb, policy, { useElb: s.elb_on, elb: s.elb });
+    out = solve(model, yb, policy, { useElb: s.elb_on, elb: meta.elb });
   } catch (e) {
     status.textContent = `No solution for these settings: ${e.message}`;
     status.dataset.kind = "error";
@@ -218,6 +237,7 @@ async function run() {
     bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the projection.` : "ELB does not bind.");
     if (!out.lcp.converged) bits.push("Warning: the ELB problem did not converge; results are approximate.");
   }
+  if (edits?.dirty) bits.push("Using your edited baseline.");
   bits.push(`Computed in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms.`);
   status.textContent = bits.join(" ");
   status.dataset.kind = out.lcp.converged ? "" : "error";
@@ -233,6 +253,7 @@ function render(s, n, t0, base, Y) {
   // counterfactual starts at the last data point so the line departs from history
   const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base[v][i] : Y[v][i - t0]));
   const bl = (v) => idx.map((i) => base[v][i]);
+  const blLabel = edits?.dirty ? "Edited baseline" : "SEP baseline";
   const proj = (arr) => arr.map((v, k) => (k < markIndex ? null : v));
 
   const longrun = idx.map((i) => base.rstar[i] + base.pitarg[i]);
@@ -240,22 +261,22 @@ function render(s, n, t0, base, Y) {
     {
       series: [
         { label: "Long-run rate", values: proj(longrun), cls: "ref" },
-        { label: "SEP baseline", values: bl("rff"), cls: "base" },
+        { label: blLabel, values: bl("rff"), cls: "base" },
         { label: "Counterfactual", values: cf("rff"), cls: "cf" },
       ],
-      hlines: s.elb_on ? [{ y: s.elb, label: "ELB" }] : [],
+      hlines: s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [],
     },
     {
       series: [
         { label: "Target", values: proj(bl("pitarg")), cls: "ref" },
-        { label: "SEP baseline", values: bl("pic4"), cls: "base" },
+        { label: blLabel, values: bl("pic4"), cls: "base" },
         { label: "Counterfactual", values: cf("pic4"), cls: "cf" },
       ],
     },
     {
       series: [
         { label: "Natural rate", values: proj(idx.map((i) => (i < t0 ? base.lurnat[i] : Y.lurnat[i - t0]))), cls: "ref" },
-        { label: "SEP baseline", values: bl("lur"), cls: "base" },
+        { label: blLabel, values: bl("lur"), cls: "base" },
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
     },
@@ -265,6 +286,113 @@ function render(s, n, t0, base, Y) {
     `Shaded: data before the ${s.vintage} SEP. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
   renderTable(labels, panels);
   return { labels, panels, s };
+}
+
+// ---------- baseline editing ----------
+function ensureEdits() {
+  if (edits && edits.vintage === state.vintage) return;
+  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const base = {};
+  for (const k of Object.keys(baselines[n])) base[k] = Float64Array.from(baselines[n][k]);
+  edits = { vintage: state.vintage, base, dirty: false };
+}
+
+function levelIndex() {
+  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  return Math.min(meta.dates.length - 1, meta.vintages[n].t0 + meta.T - 1);
+}
+
+function syncEditPanel() {
+  if (!edits) return;
+  const i = levelIndex();
+  for (const k of ["pistar", "ustar", "rstar"]) {
+    const arr = edits.base[{ pistar: "pitarg", ustar: "lurnat", rstar: "rstar" }[k]];
+    $(k).value = String(Number(arr[i].toFixed(3)));
+  }
+  $("lr-rate").textContent = `Implied long-run funds rate: ${(edits.base.rstar[i] + edits.base.pitarg[i]).toFixed(2)}%`;
+}
+
+// Change a long-run level. The reference path shifts by the full amount from the SEP date on, and the
+// baseline paths that must converge to it (inflation and the funds rate for pi*, the funds rate for r*,
+// unemployment for u*) shift by the same amount, phased in over ~3 years so they start at today's data.
+const LEVEL_REF = { pistar: "pitarg", ustar: "lurnat", rstar: "rstar" };
+const LEVEL_PATHS = { pistar: ["pic4", "rff"], ustar: ["lur"], rstar: ["rff"] };
+const PHASE_IN_Q = 12;
+
+function setLevel(k, value) {
+  if (!Number.isFinite(value)) return syncEditPanel();
+  ensureEdits();
+  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const t0 = meta.vintages[n].t0;
+  const ref = edits.base[LEVEL_REF[k]];
+  const d = value - ref[levelIndex()];
+  for (let j = t0; j < ref.length; j++) {
+    ref[j] += d;
+    const w = 1 - Math.exp(-(j - t0) / PHASE_IN_Q);
+    for (const v of LEVEL_PATHS[k]) edits.base[v][j] += d * w;
+  }
+  edits.dirty = true;
+  syncEditPanel();
+  renderEdit();
+}
+
+function onDragStart(k) {
+  dragOrig = Float64Array.from(edits.base[EDIT_VARS[k]]);
+}
+
+function onDrag(k, i, dv) {
+  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const t0 = meta.vintages[n].t0, centre = t0 - HISTORY_Q + i;
+  const b = $("brush").value, sigma = Number(b);
+  const arr = edits.base[EDIT_VARS[k]];
+  for (let j = t0; j < arr.length; j++) {
+    const w = b === "all" ? 1 : Math.exp(-0.5 * ((j - centre) / sigma) ** 2);
+    arr[j] = dragOrig[j] + dv * (w < 1e-4 ? 0 : w);
+  }
+  edits.dirty = true;
+  renderEdit();
+}
+
+function renderEdit() {
+  const s = state;
+  const n = meta.vintages.findIndex((v) => v.label === s.vintage);
+  const t0 = meta.vintages[n].t0, orig = baselines[n], cur = edits.base;
+  const start = t0 - HISTORY_Q, end = t0 + 4 * s.years;
+  const idx = [], labels = [];
+  for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
+  const markIndex = HISTORY_Q;
+  const get = (b, v) => idx.map((i) => b[v][i]);
+  const proj = (arr) => arr.map((v, k) => (k < markIndex ? null : v));
+  const lr = idx.map((i) => cur.rstar[i] + cur.pitarg[i]);
+  const mk = (v, ref) => {
+    const ser = [{ label: ref.label, values: proj(ref.values), cls: "ref" }];
+    if (edits.dirty) ser.push({ label: "SEP baseline", values: get(orig, v), cls: "base" });
+    ser.push({ label: edits.dirty ? "Edited baseline" : "SEP baseline", values: get(cur, v), cls: "cf" });
+    return { series: ser, editIdx: ser.length - 1, hlines: v === "rff" && s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [] };
+  };
+  const panels = [
+    mk("rff", { label: "Long-run rate", values: lr }),
+    mk("pic4", { label: "Target", values: get(cur, "pitarg") }),
+    mk("lur", { label: "Natural rate", values: get(cur, "lurnat") }),
+  ];
+  const status = $("status");
+  status.textContent = edits.dirty
+    ? "Baseline edited. Switch to Counterfactual to compute policy against it."
+    : "Editing mode: drag a baseline line, or change the long-run levels on the left.";
+  status.dataset.kind = "";
+  $("proj-note").textContent = `Shaded: data before the ${s.vintage} SEP. Only projected quarters can be edited.`;
+  charts.update({ labels, panels, markIndex, editable: true });
+  lastResult = { labels, panels, s };
+  renderTable(labels, panels);
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("input[name=mode]").forEach((r) => { r.checked = r.value === m; });
+  $("policy-section").hidden = $("elb-section").hidden = m === "edit";
+  $("edit-section").hidden = m !== "edit";
+  if (m === "edit") { ensureEdits(); syncEditPanel(); }
+  schedule();
 }
 
 function renderTable(labels, panels) {
@@ -324,11 +452,11 @@ async function main() {
     { title: "Federal funds rate (%)" },
     { title: "Inflation, 4-quarter PCE (%)" },
     { title: "Unemployment rate (%)" },
-  ]);
+  ], { onDragStart, onDrag });
   buildControls();
   state = readHash();
   syncControls();
-  schedule();
+  setMode("cf");
   window.addEventListener("hashchange", () => {
     const s = readHash();
     if (JSON.stringify(s) !== JSON.stringify(state)) { state = s; syncControls(); schedule(); }

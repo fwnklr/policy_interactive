@@ -14,6 +14,11 @@
   <p class="lede">What would the economy have looked like under a different monetary policy? Pick an SEP
     baseline and a model, then choose a policy rule or optimal commitment. Each counterfactual is
     computed in your browser.</p>
+  <fieldset class="segmented modes">
+    <legend class="sr">Mode</legend>
+    <label><input type="radio" name="mode" value="cf" checked autocomplete="off"> Counterfactual</label>
+    <label><input type="radio" name="mode" value="edit" autocomplete="off"> Edit baseline</label>
+  </fieldset>
 </header>
 
 <main>
@@ -27,7 +32,7 @@
       </label>
     </section>
 
-    <section>
+    <section id="policy-section">
       <fieldset class="segmented">
         <legend>Policy</legend>
         <label><input type="radio" name="policy" value="rule"> Simple rule</label>
@@ -76,12 +81,29 @@
       </div>
     </section>
 
-    <section>
-      <label class="check"><input type="checkbox" id="elb_on"> Enforce the effective lower bound</label>
-      <label class="slider">
-        <span><span>ELB level (%)</span> <output id="elb-out"></output></span>
-        <input type="range" id="elb" min="0" max="1" step="0.125">
+    <section id="elb-section">
+      <label class="check"><input type="checkbox" id="elb_on"> Enforce the effective lower bound (0.125%)</label>
+    </section>
+
+    <section id="edit-section" hidden>
+      <p class="hint first">Drag a baseline line up or down in the charts. Nearby quarters follow smoothly.</p>
+      <label class="field">Brush width
+        <select id="brush">
+          <option value="2">Narrow (about 1 year)</option>
+          <option value="5" selected>Medium (about 3 years)</option>
+          <option value="10">Wide (about 6 years)</option>
+          <option value="all">Whole path (parallel shift)</option>
+        </select>
       </label>
+      <p class="sub">Long-run levels</p>
+      <div class="levels">
+        <label>Inflation target π* <input type="number" id="pistar" step="0.25" min="-2" max="10"></label>
+        <label>Natural unemployment u* <input type="number" id="ustar" step="0.25" min="0" max="15"></label>
+        <label>Real neutral rate r* <input type="number" id="rstar" step="0.25" min="-3" max="8"></label>
+      </div>
+      <p class="hint" id="lr-rate"></p>
+      <p class="hint">Changing a level also moves the baseline paths so they converge to it, and sets the rule intercept and the loss-function target.</p>
+      <button type="button" id="reset-base" class="ghost">Reset to SEP baseline</button>
     </section>
 
     <section class="row">
