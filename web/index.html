@@ -86,23 +86,15 @@
     </section>
 
     <section id="edit-section" hidden>
-      <p class="hint first">Drag a baseline line up or down in the charts. Nearby quarters follow smoothly.</p>
-      <label class="field">Brush width
-        <select id="brush">
-          <option value="2">Narrow (about 1 year)</option>
-          <option value="5" selected>Medium (about 3 years)</option>
-          <option value="10">Wide (about 6 years)</option>
-          <option value="all">Whole path (parallel shift)</option>
-        </select>
-      </label>
+      <p class="hint first">Drag a baseline line up or down in the charts. Choose the brush above the charts.</p>
       <p class="sub">Long-run levels</p>
       <div class="levels">
         <label>Inflation target π* <input type="number" id="pistar" step="0.25" min="-2" max="10"></label>
         <label>Natural unemployment u* <input type="number" id="ustar" step="0.25" min="0" max="15"></label>
-        <label>Real neutral rate r* <input type="number" id="rstar" step="0.25" min="-3" max="8"></label>
+        <label>Long-run funds rate <input type="number" id="lrrate" step="0.25" min="-3" max="12"></label>
       </div>
       <p class="hint" id="lr-rate"></p>
-      <p class="hint">Changing a level also moves the baseline paths so they converge to it, and sets the rule intercept and the loss-function target.</p>
+      <p class="hint">Changing a level also moves the baseline paths so they converge to it, and sets the rule intercept and the loss-function target. Changing π* keeps r* fixed, so the long-run funds rate moves with it.</p>
       <button type="button" id="reset-base" class="ghost">Reset to SEP baseline</button>
     </section>
 
@@ -119,6 +111,14 @@
   </aside>
 
   <section class="results" aria-live="polite">
+    <div id="brush-bar" class="brush" hidden>
+      <span>Brush</span>
+      <div class="presets" role="group" aria-label="Brush width">
+        <button type="button" data-brush="point">Single point</button>
+        <button type="button" data-brush="2">1 year</button>
+        <button type="button" data-brush="6">3 years</button>
+      </div>
+    </div>
     <p id="status" class="status">Loading data…</p>
     <div id="charts" class="charts"></div>
     <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target and natural rate

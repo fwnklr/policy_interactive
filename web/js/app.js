@@ -29,6 +29,7 @@ let meta, baselines, charts, state, pending = false, lastResult = null;
 let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, solver off)
 let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg}, dirty } working copy of a baseline
 let dragOrig = null;
+let brush = "2";       // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
 const EDIT_VARS = ["rff", "pic4", "lur"];   // variable behind each chart panel
 
 // ---------- state <-> URL hash (shareable scenarios) ----------
@@ -114,9 +115,14 @@ function buildControls() {
   document.querySelectorAll("input[name=mode]").forEach((r) =>
     r.addEventListener("change", () => setMode(r.value)));
   $("reset-base").addEventListener("click", () => { edits = null; ensureEdits(); renderEdit(); syncEditPanel(); });
-  for (const k of ["pistar", "ustar", "rstar"]) {
+  for (const k of ["pistar", "ustar", "lrrate"]) {
     $(k).addEventListener("change", () => setLevel(k, Number($(k).value)));
   }
+  document.querySelectorAll("#brush-bar button").forEach((b) => b.addEventListener("click", () => {
+    brush = b.dataset.brush;
+    syncBrush();
+  }));
+  syncBrush();
   $("download").addEventListener("click", downloadCsv);
   $("copy-link").addEventListener("click", async () => {
     const b = $("copy-link");
@@ -302,14 +308,18 @@ function levelIndex() {
   return Math.min(meta.dates.length - 1, meta.vintages[n].t0 + meta.T - 1);
 }
 
+function syncBrush() {
+  document.querySelectorAll("#brush-bar button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.brush === brush));
+}
+
 function syncEditPanel() {
   if (!edits) return;
   const i = levelIndex();
-  for (const k of ["pistar", "ustar", "rstar"]) {
-    const arr = edits.base[{ pistar: "pitarg", ustar: "lurnat", rstar: "rstar" }[k]];
-    $(k).value = String(Number(arr[i].toFixed(3)));
-  }
-  $("lr-rate").textContent = `Implied long-run funds rate: ${(edits.base.rstar[i] + edits.base.pitarg[i]).toFixed(2)}%`;
+  const b = edits.base;
+  $("pistar").value = String(Number(b.pitarg[i].toFixed(3)));
+  $("ustar").value = String(Number(b.lurnat[i].toFixed(3)));
+  $("lrrate").value = String(Number((b.rstar[i] + b.pitarg[i]).toFixed(3)));
+  $("lr-rate").textContent = `Implied real neutral rate r*: ${b.rstar[i].toFixed(2)}%`;
 }
 
 // Change a long-run level. The reference path shifts by the full amount from the SEP date on, and the
@@ -324,8 +334,10 @@ function setLevel(k, value) {
   ensureEdits();
   const n = meta.vintages.findIndex((v) => v.label === state.vintage);
   const t0 = meta.vintages[n].t0;
+  const li = levelIndex();
+  if (k === "lrrate") { value -= edits.base.pitarg[li]; k = "rstar"; }   // nominal rate entered; r* is implied
   const ref = edits.base[LEVEL_REF[k]];
-  const d = value - ref[levelIndex()];
+  const d = value - ref[li];
   for (let j = t0; j < ref.length; j++) {
     ref[j] += d;
     const w = 1 - Math.exp(-(j - t0) / PHASE_IN_Q);
@@ -343,10 +355,10 @@ function onDragStart(k) {
 function onDrag(k, i, dv) {
   const n = meta.vintages.findIndex((v) => v.label === state.vintage);
   const t0 = meta.vintages[n].t0, centre = t0 - HISTORY_Q + i;
-  const b = $("brush").value, sigma = Number(b);
+  const sigma = Number(brush);
   const arr = edits.base[EDIT_VARS[k]];
   for (let j = t0; j < arr.length; j++) {
-    const w = b === "all" ? 1 : Math.exp(-0.5 * ((j - centre) / sigma) ** 2);
+    const w = brush === "point" ? (j === centre ? 1 : 0) : Math.exp(-0.5 * ((j - centre) / sigma) ** 2);
     arr[j] = dragOrig[j] + dv * (w < 1e-4 ? 0 : w);
   }
   edits.dirty = true;
@@ -391,6 +403,7 @@ function setMode(m) {
   document.querySelectorAll("input[name=mode]").forEach((r) => { r.checked = r.value === m; });
   $("policy-section").hidden = $("elb-section").hidden = m === "edit";
   $("edit-section").hidden = m !== "edit";
+  $("brush-bar").hidden = m !== "edit";
   if (m === "edit") { ensureEdits(); syncEditPanel(); }
   schedule();
 }
