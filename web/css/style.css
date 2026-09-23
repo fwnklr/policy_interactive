@@ -252,3 +252,4 @@ body.busy .charts { opacity: 0.6; }
 .editable .panel { outline: 1px dashed var(--accent); outline-offset: -1px; }
 .brush { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 0.85rem; color: var(--ink-2); }
 .brush .presets { margin: 0; }
+.brush[hidden] { display: none; }
