@@ -14,3 +14,23 @@ effective lower bound. Counterfactuals are computed in the browser.
 - `web/` — static site (served by GitHub Pages): page, JavaScript solver, exported data.
 - `tools/export_data.py` — exports model IRF matrices and SEP baselines from the
   replication package (`../replication`) into `web/data/`.
+
+## Rebuilding the data and testing the solver
+
+Requires the replication package next to this folder (`../replication`) and
+`numpy`/`scipy`.
+
+```bash
+python3 tools/export_data.py      # writes web/data/
+python3 tools/make_reference.py   # solves test cases with the replication Python solver
+python3 -m http.server 8765       # then open http://localhost:8765/tools/test/check.html
+```
+
+The check page runs the JavaScript solver on every reference case (2 models × 4
+baselines × simple rules and commitment, with and without the ELB) and reports
+the largest deviation from the Python solution.
+
+Differences from the replication code: one baseline at a time (no re-optimization
+across SEP vintages), and an ELB complementarity tolerance of 1e-7 instead of 1e-3,
+which makes the binding set, and therefore the solution, independent of the
+random seed of the search heuristic.
