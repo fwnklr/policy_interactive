@@ -9,9 +9,12 @@ Pick an SEP baseline and a model (FRB/US-LINVER or DGS-FHP), choose a simple int
 rule or optimal commitment, set the rule coefficients or loss weights, and toggle the
 effective lower bound. Counterfactuals are computed in the browser.
 
+**Live:** https://fwnklr.github.io/policy_interactive/
+
 ## Layout
 
-- `web/` — static site (served by GitHub Pages): page, JavaScript solver, exported data.
+- `web/` — static site: page, JavaScript solver (`js/solver.js`, `js/lcp.js`), charts, exported data.
+  Deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`.
 - `tools/export_data.py` — exports model IRF matrices and SEP baselines from the
   replication package (`../replication`) into `web/data/`.
 

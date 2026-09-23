@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Policy Counterfactuals</title>
+<meta name="description" content="Interactive monetary policy counterfactuals in sequence space: simple rules and optimal commitment around Fed SEP baselines, with an effective lower bound.">
+<link rel="stylesheet" href="css/style.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="site">
+  <h1>Policy counterfactuals</h1>
+  <p class="lede">What would the economy have looked like under a different monetary policy? Pick an SEP
+    baseline and a model, then choose a policy rule or optimal commitment. Each counterfactual is
+    computed in your browser.</p>
+</header>
+
+<main>
+  <aside class="controls" aria-label="Scenario settings">
+    <section>
+      <label class="field">Baseline (FOMC SEP)
+        <select id="vintage"></select>
+      </label>
+      <label class="field">Model
+        <select id="model"></select>
+      </label>
+    </section>
+
+    <section>
+      <fieldset class="segmented">
+        <legend>Policy</legend>
+        <label><input type="radio" name="policy" value="rule"> Simple rule</label>
+        <label><input type="radio" name="policy" value="commitment"> Optimal commitment</label>
+      </fieldset>
+
+      <div id="rule-controls">
+        <p class="formula"><span>r<sub>t</sub> = ρ r<sub>t−1</sub></span> <span>+ (1−ρ)(r* + π*)</span>
+          <span>+ φ<sub>π</sub>(π<sub>t</sub> − π*)</span> <span>− φ<sub>u</sub>(u<sub>t</sub> − u*<sub>t</sub>)</span>
+          <span>− φ<sub>Δu</sub>(u<sub>t</sub> − u<sub>t−4</sub>)</span></p>
+        <div class="presets" id="rule-presets" role="group" aria-label="Rule presets"></div>
+        <label class="slider">
+          <span><span>Inertia ρ</span> <output id="rho-out"></output></span>
+          <input type="range" id="rho" min="0" max="1" step="0.01">
+        </label>
+        <label class="slider">
+          <span><span>Inflation gap φ<sub>π</sub></span> <output id="phi_pi-out"></output></span>
+          <input type="range" id="phi_pi" min="0" max="3" step="0.025">
+        </label>
+        <label class="slider">
+          <span><span>Unemployment gap φ<sub>u</sub></span> <output id="phi_u-out"></output></span>
+          <input type="range" id="phi_u" min="0" max="3" step="0.05">
+        </label>
+        <label class="slider">
+          <span><span>Change in unemployment φ<sub>Δu</sub></span> <output id="phi_du-out"></output></span>
+          <input type="range" id="phi_du" min="0" max="2" step="0.05">
+        </label>
+        <p class="hint" id="rule-longrun"></p>
+      </div>
+
+      <div id="loss-controls" hidden>
+        <p class="formula"><span>min Σ<sub>t</sub> β<sup>t</sup> [ (π<sub>t</sub> − π*)<sup>2</sup></span>
+          <span>+ λ<sub>u</sub>(u<sub>t</sub> − u*<sub>t</sub>)<sup>2</sup></span>
+          <span>+ λ<sub>Δr</sub>(r<sub>t</sub> − r<sub>t−1</sub>)<sup>2</sup> ]</span></p>
+        <div class="presets" id="loss-presets" role="group" aria-label="Loss presets"></div>
+        <label class="slider">
+          <span><span>Unemployment weight λ<sub>u</sub></span> <output id="lam_u-out"></output></span>
+          <input type="range" id="lam_u" min="0" step="1">
+        </label>
+        <label class="slider">
+          <span><span>Rate-change weight λ<sub>Δr</sub></span> <output id="lam_dr-out"></output></span>
+          <input type="range" id="lam_dr" min="0" step="1">
+        </label>
+        <p class="hint">Weight on inflation normalized to 1; β = 0.9963. The policymaker commits at the
+          SEP date to a path for the funds rate.</p>
+      </div>
+    </section>
+
+    <section>
+      <label class="check"><input type="checkbox" id="elb_on"> Enforce the effective lower bound</label>
+      <label class="slider">
+        <span><span>ELB level (%)</span> <output id="elb-out"></output></span>
+        <input type="range" id="elb" min="0" max="1" step="0.125">
+      </label>
+    </section>
+
+    <section class="row">
+      <label class="field inline">Show
+        <select id="years">
+          <option value="3">3 years</option>
+          <option value="6">6 years</option>
+          <option value="10">10 years</option>
+        </select>
+      </label>
+      <button type="button" id="reset" class="ghost">Reset</button>
+    </section>
+  </aside>
+
+  <section class="results" aria-live="polite">
+    <p id="status" class="status">Loading data…</p>
+    <div id="charts" class="charts"></div>
+    <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target and natural rate
+      of unemployment.</p>
+    <div class="actions">
+      <button type="button" id="download" class="ghost">Download CSV</button>
+      <button type="button" id="copy-link" class="ghost">Copy link to this scenario</button>
+    </div>
+    <details class="table-view">
+      <summary>Data table</summary>
+      <div class="table-wrap"><table id="data-table"></table></div>
+    </details>
+  </section>
+</main>
+
+<section class="about">
+  <h2>How it works</h2>
+  <p>Each model is summarized by its responses to anticipated ("news") monetary policy shocks in every
+    future quarter. Stacked together, these impulse responses map any path of policy shocks into paths
+    for the economy: <i>y</i> = <i>ȳ</i> + <i>M x</i>, where <i>ȳ</i> is the SEP baseline. A policy rule
+    or the first-order conditions of optimal commitment pin down the shocks <i>x</i> that implement that
+    policy against the baseline. The effective lower bound turns this into a linear complementarity
+    problem, solved exactly. The counterfactual starts in the quarter of the SEP release; earlier
+    quarters are data.</p>
+  <p>Models: a linearized version of the Federal Reserve Board's FRB/US model (LINVER), and the
+    Del Negro–Giannoni–Schorfheide model with finite-horizon planning (DGS-FHP). Baselines: FOMC
+    Summary of Economic Projections, extended beyond the SEP horizon.</p>
+  <p class="cite">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
+    space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
+    <a href="https://doi.org/10.1016/j.jedc.2025.105228">doi:10.1016/j.jedc.2025.105228</a> ·
+    <a href="https://github.com/fwnklr/policy_interactive">Source code</a></p>
+</section>
+</body>
+</html>
