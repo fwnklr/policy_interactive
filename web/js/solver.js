@@ -12,6 +12,8 @@ import { solveLCP } from "./lcp.js";
 
 export const T_RULE_ELB = 80;   // rules: ELB imposed over the first 80 quarters (as in the paper)
 export const OUTPUT_VARS = ["rff", "pic4", "lur", "lurnat", "xgap2"];
+// Variables without a baseline in the SEP database: only the deviation from baseline is reported.
+export const DEVIATION_VARS = ["hggdp"];
 
 function shiftRows(A, k) {
   const B = mat(A.r, A.c);
@@ -157,5 +159,7 @@ export function solve(model, yb, policy, { useElb = true, elb = 0.125, seed = 1,
     const Mx = matvec(M[v], x);
     Y[v] = Float64Array.from({ length: T }, (_, t) => yb[v][t] + Mx[t]);
   }
-  return { Y, x, lcp };
+  const D = {};
+  for (const v of DEVIATION_VARS) D[v] = matvec(M[v], x);
+  return { Y, D, x, lcp };
 }

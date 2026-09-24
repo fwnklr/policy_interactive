@@ -30,7 +30,7 @@ let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, so
 let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg}, dirty } working copy of a baseline
 let dragOrig = null;
 let brush = "2";       // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
-const EDIT_VARS = ["rff", "pic4", "lur", "xgap2"];   // variable behind each chart panel
+const EDIT_VARS = ["rff", "pic4", "lur", "hggdp"];   // variable behind each chart panel
 
 // ---------- state <-> URL hash (shareable scenarios) ----------
 function readHash() {
@@ -243,18 +243,23 @@ async function run() {
   const bits = [];
   if (s.elb_on) {
     const q = out.lcp.bindingQuarters;
-    bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the projection.` : "ELB does not bind.");
-    if (!out.lcp.converged) bits.push("Warning: the ELB problem did not converge; results are approximate.");
+    if (!out.lcp.converged) bits.push("No solution that respects the ELB was found for these settings; the path shown ignores it.");
+    else bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the projection.` : "ELB does not bind.");
   }
   if (edits?.dirty) bits.push("Using your edited baseline.");
   bits.push(`Computed in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms.`);
   status.textContent = bits.join(" ");
   status.dataset.kind = out.lcp.converged ? "" : "error";
 
-  lastResult = render(s, n, t0, base, out.Y);
+  lastResult = render(s, n, t0, base, out.Y, out.D);
 }
 
-function render(s, n, t0, base, Y) {
+// GDP growth: the SEP database may or may not carry a baseline path for it (see tools/export_data.py).
+const hasGrowthBase = () => meta.bvars.includes("hggdp");
+const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
+const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus baseline (pp)";
+
+function render(s, n, t0, base, Y, D) {
   const start = t0 - HISTORY_Q, H = 4 * s.years, end = t0 + H;
   const labels = [], idx = [];
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
@@ -289,13 +294,21 @@ function render(s, n, t0, base, Y) {
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
     },
-    {
-      series: [
-        { label: "Potential", values: proj(idx.map(() => 0)), cls: "ref" },
-        { label: blLabel, values: bl("xgap2"), cls: "base" },
-        { label: "Counterfactual", values: cf("xgap2"), cls: "cf" },
-      ],
-    },
+    hasGrowthBase()
+      ? {
+        title: GROWTH_TITLE,
+        series: [
+          { label: blLabel, values: bl("hggdp"), cls: "base" },
+          { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : base.hggdp[i] + D.hggdp[i - t0])), cls: "cf" },
+        ],
+      }
+      : {
+        title: GROWTH_DIFF_TITLE,
+        series: [
+          { label: "Baseline", values: proj(idx.map(() => 0)), cls: "ref" },
+          { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : D.hggdp[i - t0])), cls: "cf" },
+        ],
+      },
   ];
   charts.update({ labels, panels, markIndex });
   $("proj-note").textContent =
@@ -386,7 +399,7 @@ function renderEdit() {
   const proj = (arr) => arr.map((v, k) => (k < markIndex ? null : v));
   const lr = idx.map((i) => cur.rstar[i] + cur.pitarg[i]);
   const mk = (v, ref) => {
-    const ser = [{ label: ref.label, values: proj(ref.values), cls: "ref" }];
+    const ser = ref ? [{ label: ref.label, values: proj(ref.values), cls: "ref" }] : [];
     if (edits.dirty) ser.push({ label: "SEP baseline", values: get(orig, v), cls: "base" });
     ser.push({ label: edits.dirty ? "Edited baseline" : "SEP baseline", values: get(cur, v), cls: "cf" });
     return { series: ser, editIdx: ser.length - 1, hlines: v === "rff" && s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [] };
@@ -395,7 +408,8 @@ function renderEdit() {
     mk("rff", { label: "Long-run rate", values: lr }),
     mk("pic4", { label: "Target", values: get(cur, "pitarg") }),
     mk("lur", { label: "Natural rate", values: get(cur, "lurnat") }),
-    mk("xgap2", { label: "Potential", values: idx.map(() => 0) }),
+    // Without a baseline for GDP growth there is nothing to edit; the panel is hidden in this mode.
+    hasGrowthBase() ? { ...mk("hggdp", null), title: GROWTH_TITLE } : { series: [], hidden: true },
   ];
   const status = $("status");
   status.textContent = edits.dirty
@@ -420,7 +434,7 @@ function setMode(m) {
 function downloadCsv() {
   if (!lastResult) return;
   const { labels, panels, s } = lastResult;
-  const names = ["rff", "inflation", "unemployment", "output gap"];
+  const names = ["rff", "inflation", "unemployment", hasGrowthBase() ? "GDP growth" : "GDP growth minus baseline"];
   const cols = [];
   panels.forEach((p, k) => p.series.forEach((ser) => cols.push({ name: `${names[k]} ${ser.label}`, values: ser.values })));
   const lines = [
@@ -454,7 +468,7 @@ async function main() {
     { title: "Federal funds rate (%)" },
     { title: "Inflation, 4-quarter PCE (%)" },
     { title: "Unemployment rate (%)" },
-    { title: "Output gap (% of potential)" },
+    { title: GROWTH_TITLE },
   ], { onDragStart, onDrag });
   buildControls();
   state = readHash();

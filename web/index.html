@@ -122,8 +122,8 @@
     </div>
     <p id="status" class="status">Loading data…</p>
     <div id="charts" class="charts"></div>
-    <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target, natural rate
-      of unemployment and potential output (zero gap).</p>
+    <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target and natural rate
+      of unemployment.</p>
     <div class="actions">
       <button type="button" id="download" class="ghost">Download CSV</button>
       <button type="button" id="copy-link" class="ghost">Copy link to this scenario</button>
@@ -140,9 +140,13 @@
     policy against the baseline. The effective lower bound turns this into a linear complementarity
     problem, solved exactly. The counterfactual starts in the quarter of the SEP release; earlier
     quarters are data.</p>
-  <p>Models: a linearized version of the Federal Reserve Board's FRB/US model (LINVER), and the
-    Del Negro–Giannoni–Schorfheide model with finite-horizon planning (DGS-FHP). Baselines: FOMC
-    Summary of Economic Projections, extended beyond the SEP horizon.</p>
+  <p>Models: a linearized version of the Federal Reserve Board's FRB/US model (LINVER), the
+    Del Negro–Giannoni–Schorfheide model with finite-horizon planning (DGS-FHP), and the Smets–Wouters
+    (2007) model. In the Smets–Wouters model, unemployment is obtained from the output gap through an
+    Okun's law relation (u − u* = −0.5 × gap). Baselines: FOMC Summary of Economic Projections, extended
+    beyond the SEP horizon. GDP growth is the model's quarterly annualized growth rate. The SEP baseline
+    database has no path for it, so its panel shows the difference between the counterfactual and the
+    baseline.</p>
   <p class="cite">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
     space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
     <a href="https://doi.org/10.1016/j.jedc.2025.105228">doi:10.1016/j.jedc.2025.105228</a> ·

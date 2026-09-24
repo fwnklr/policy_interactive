@@ -1,6 +1,6 @@
 """Export model IRF matrices and SEP baselines for the web app.
 
-Reads the replication package (../../replication by default) and writes
+Reads the replication package (data/sep_data.mat and output/model_results/*.mat) (../../replication by default) and writes
 
     web/data/meta.json            variable names, dates, vintages, file layout
     web/data/M_<model>.bin        float32, [var][t][s] for MVARS, T x T each
@@ -29,20 +29,27 @@ from irfoc.io_mat import load_dynare_results, load_tb_data  # noqa: E402
 
 OUT = os.path.join(REPO, "web", "data")
 T = 200
-MVARS = ["pic4", "rff", "lur", "lurnat", "xgap2"]
+MVARS = ["pic4", "rff", "lur", "lurnat", "xgap2", "hggdp"]
 BVARS = ["rff", "pic4", "lur", "lurnat", "xgap2", "rstar", "pitarg"]
+# GDP growth (annualized quarterly, %) is exported as a baseline too as soon as the SEP database carries it for
+# every vintage exported; until then the web page shows the counterfactual growth response only.
+OPTIONAL_BVARS = ["hggdp"]
 
 MODELS = {
     "linver_mcapwp": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER)"},
     "dgs_fhp": {"file": "dgs_fhp_irfoc_1PC_results.mat", "label": "DGS-FHP"},
+    "sw": {"file": "sw_results.mat", "label": "Smets\u2013Wouters (2007)"},
 }
 
-# (data file, group label, vintages to drop).  The 2021.0 entry in sep6_data.mat
-# is a realized-data path used only as a plotting reference, not an SEP baseline.
-BASELINE_SETS = [
-    ("sep_covid_data.mat", "SEP 2020–2023", []),
-    ("sep6_data.mat", "SEP 2014–2016", [2021.0]),
-]
+# Baselines: one database (data/sep_data.mat) with a per-vintage is_covid flag.  Vintage values collide
+# across the two pools (2021.0 appears in both), so pools are told apart by the flag.  The pre-covid
+# pool's 2021.0 entry is a realized-data path (used only as a plotting reference in the paper), not an
+# SEP baseline, so it is dropped.
+GROUPS = [(True, "SEP 2020\u20132023"), (False, "SEP 2014\u20132016")]
+
+
+def dropped(v, is_covid):
+    return (not is_covid) and abs(v - 2021.0) < 1e-9
 
 
 def quarter_label(x: float) -> str:
@@ -65,22 +72,29 @@ def export_models(meta):
 
 
 def export_baselines(meta):
-    dates = None
+    tb = load_tb_data(os.path.join(REPL, "data", "sep_data.mat"))
+    dates = tb.dates
+    keep = [n for n, v in enumerate(tb.vintages) if not dropped(v, bool(tb.is_covid[n]))]
+    bvars = list(BVARS)
+    for k in OPTIONAL_BVARS:
+        if k in tb.varj and not np.isnan(tb.Ybase[tb.varj[k]][:, keep]).any():
+            bvars.append(k)
+        else:
+            print(f"note: baseline variable '{k}' not (fully) in sep_data.mat; not exported")
+    meta["bvars"] = bvars
     blocks, vintages = [], []
-    for fname, group, drop in BASELINE_SETS:
-        tb = load_tb_data(os.path.join(REPL, "data", fname))
-        if dates is None:
-            dates = tb.dates
-        assert np.array_equal(dates, tb.dates), "baseline files have different date grids"
+    for covid, group in GROUPS:
         for n, v in enumerate(tb.vintages):
-            if any(abs(v - d) < 1e-9 for d in drop):
+            if bool(tb.is_covid[n]) != covid or dropped(v, covid):
                 continue
-            Y = np.stack([tb.Ybase[tb.varj[k], :, n] for k in BVARS])
-            assert not np.isnan(Y).any()
+            Y = np.stack([tb.Ybase[tb.varj[k], :, n] for k in bvars])
+            assert not np.isnan(Y).any(), f"NaN in baseline {v} ({group})"
             blocks.append(Y)
             # 0-based index of the first simulated period (= vintage quarter)
             t0 = int(round((v - dates[0]) * 4))
             vintages.append({"label": quarter_label(v), "year": float(v), "group": group, "t0": t0})
+    labels = [v["label"] for v in vintages]
+    assert len(set(labels)) == len(labels), "duplicate vintage labels"
     np.stack(blocks).astype("<f4").tofile(os.path.join(OUT, "baselines.bin"))
     meta["dates"] = [float(d) for d in dates]
     meta["vintages"] = vintages

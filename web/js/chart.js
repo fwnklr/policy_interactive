@@ -70,6 +70,9 @@ export class LinkedCharts {
     const n = labels.length;
     this.panels.forEach((p, k) => {
       const d = panels[k];
+      p.wrap.hidden = !!d.hidden;
+      if (d.title) p.wrap.querySelector("h3").textContent = d.title;
+      if (d.hidden) { p.scale = null; p.svg.replaceChildren(); return; }
       this.#legend(p, d);
       const W = p.box.clientWidth || 600;
       const H = p.box.clientHeight || 200;

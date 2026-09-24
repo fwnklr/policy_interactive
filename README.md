@@ -15,8 +15,10 @@ effective lower bound. Counterfactuals are computed in the browser.
 
 - `web/` — static site: page, JavaScript solver (`js/solver.js`, `js/lcp.js`), charts, exported data.
   Deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`.
-- `tools/export_data.py` — exports model IRF matrices and SEP baselines from the
-  replication package (`../replication`) into `web/data/`.
+- `tools/export_data.py` — exports model IRF matrices (FRB/US-LINVER, DGS-FHP, Smets–Wouters) and the SEP
+  baselines (`data/sep_data.mat`) from the replication package (`../replication`) into `web/data/`.
+  GDP growth (`hggdp`) responses are exported for all models; a GDP growth baseline is exported as soon as
+  `sep_data.mat` contains it for every vintage.
 
 ## Rebuilding the data and testing the solver
 
@@ -29,7 +31,7 @@ python3 tools/make_reference.py   # solves test cases with the replication Pytho
 python3 -m http.server 8765       # then open http://localhost:8765/tools/test/check.html
 ```
 
-The check page runs the JavaScript solver on every reference case (2 models × 4
+The check page runs the JavaScript solver on every reference case (3 models × 4
 baselines × simple rules and commitment, with and without the ELB) and reports
 the largest deviation from the Python solution.
 

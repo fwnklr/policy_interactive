@@ -5,7 +5,8 @@
   "rff",
   "lur",
   "lurnat",
-  "xgap2"
+  "xgap2",
+  "hggdp"
  ],
  "bvars": [
   "rff",
@@ -29,6 +30,11 @@
    "key": "dgs_fhp",
    "label": "DGS-FHP",
    "file": "M_dgs_fhp.bin"
+  },
+  {
+   "key": "sw",
+   "label": "Smets\u2013Wouters (2007)",
+   "file": "M_sw.bin"
   }
  ],
  "dates": [

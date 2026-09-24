@@ -23,11 +23,18 @@ sys.path.insert(0, os.path.join(REPL, "python"))
 
 from irfoc.linalg_utils import block_diag, mkron, mreshape  # noqa: E402
 from irfoc.modelsolver import ModelSolver, PolicyMap  # noqa: E402
+import irfoc.solve_lcp as _slcp  # noqa: E402
+
+# The replication solver falls back to an unbounded least-squares search when its heuristic fails, which can
+# run for minutes on infeasible problems (e.g. the first-difference rule with the ELB in the SW model).
+# Cap it so such cases are reported as not converged instead of hanging.
+_ls = _slcp.least_squares
+_slcp.least_squares = lambda *a, **k: _ls(*a, max_nfev=25, **k)
 
 DATA = os.path.join(REPO, "web", "data")
 OUT = os.path.join(HERE, "test", "reference.json")
 
-VARS = ["pic4", "rff", "lur", "lurnat", "xgap2", "lagrff", "lag4lur", "elb", "rstar", "pitarg"]
+VARS = ["pic4", "rff", "lur", "lurnat", "xgap2", "hggdp", "lagrff", "lag4lur", "elb", "rstar", "pitarg"]
 vj = {v: i for i, v in enumerate(VARS)}
 J = len(VARS)
 T_RULE_ELB = 80  # rules: ELB imposed over the first 80 quarters (as in oc_solve.py)
@@ -47,6 +54,7 @@ LOSSES = {
     "custom": dict(lam_u=0.25, lam_dr=0.5),
 }
 VINTAGES = ["2020:Q2", "2021:Q4", "2023:Q4", "2015:Q1"]
+# hggdp has no baseline in the database, so its reference "path" is the deviation from baseline.
 
 
 def load():
@@ -159,7 +167,7 @@ def main():
                             "model": model, "vintage": vlab, "policy": policy, "name": name,
                             "params": p, "use_elb": use_elb, "elb": elb,
                             "converged": bool(flag[0]),
-                            "Y": {v: Y[vj[v], sl].tolist() for v in ["rff", "pic4", "lur", "lurnat", "xgap2"]},
+                            "Y": {v: Y[vj[v], sl].tolist() for v in ["rff", "pic4", "lur", "lurnat", "xgap2", "hggdp"]},
                         })
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
