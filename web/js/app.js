@@ -119,7 +119,7 @@ function buildControls() {
   document.querySelectorAll("input[name=mode]").forEach((r) =>
     r.addEventListener("change", () => setMode(r.value)));
   $("reset-base").addEventListener("click", () => { edits = null; ensureEdits(); renderEdit(); syncEditPanel(); });
-  for (const k of ["pistar", "ustar", "lrrate"]) {
+  for (const k of ["pistar", "ustar", "lrrate", "gstar"]) {
     $(k).addEventListener("change", () => setLevel(k, Number($(k).value)));
   }
   document.querySelectorAll("#brush-bar button").forEach((b) => b.addEventListener("click", () => {
@@ -346,6 +346,8 @@ function syncEditPanel() {
   $("ustar").value = String(Number(b.lurnat[i].toFixed(3)));
   $("lrrate").value = String(Number((b.rstar[i] + b.pitarg[i]).toFixed(3)));
   $("lr-rate").textContent = `Implied real neutral rate r*: ${b.rstar[i].toFixed(2)}%`;
+  $("gstar-row").hidden = !hasGrowthBase();
+  if (hasGrowthBase()) $("gstar").value = String(Number(terminal(b.hggdp).toFixed(3)));
 }
 
 // Change a long-run level. The reference path shifts by the full amount from the SEP date on, and the
@@ -361,6 +363,14 @@ function setLevel(k, value) {
   const n = meta.vintages.findIndex((v) => v.label === state.vintage);
   const t0 = meta.vintages[n].t0;
   const li = levelIndex();
+  if (k === "gstar") {   // long-run growth is the terminal value of the growth path itself; shift the path toward it
+    const g = edits.base.hggdp, d = value - terminal(g);
+    for (let j = t0; j < g.length; j++) g[j] += d * (1 - Math.exp(-(j - t0) / PHASE_IN_Q));
+    edits.dirty = true;
+    syncEditPanel();
+    renderEdit();
+    return;
+  }
   if (k === "lrrate") { value -= edits.base.pitarg[li]; k = "rstar"; }   // nominal rate entered; r* is implied
   const ref = edits.base[LEVEL_REF[k]];
   const d = value - ref[li];

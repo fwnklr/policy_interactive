@@ -92,6 +92,7 @@
         <label>Inflation target π* <input type="number" id="pistar" step="0.25" min="-2" max="10"></label>
         <label>Natural unemployment u* <input type="number" id="ustar" step="0.25" min="0" max="15"></label>
         <label>Long-run funds rate <input type="number" id="lrrate" step="0.25" min="-3" max="12"></label>
+        <label id="gstar-row">Long-run GDP growth <input type="number" id="gstar" step="0.25" min="-2" max="8"></label>
       </div>
       <p class="hint" id="lr-rate"></p>
       <p class="hint">Changing a level also moves the baseline paths so they converge to it, and sets the rule intercept and the loss-function target. Changing π* keeps r* fixed, so the long-run funds rate moves with it.</p>
