@@ -1,9 +1,10 @@
 import { loadMeta, loadModel, loadBaselines } from "./data.js?v=__BUILD__";
-import { solve, baselineWindow } from "./solver.js?v=__BUILD__";
+import { createSequenceRunner } from "./solver.js?v=__BUILD__";
 import { LinkedCharts } from "./chart.js?v=__BUILD__";
 
 const DATA_DIR = "data";
 const HISTORY_Q = 8;   // quarters of data shown before the projection starts
+const STEP_DELAY_MS = 500;   // pause between updates while animating a sequence
 
 const RULE_PRESETS = {
   T93: { label: "Taylor (1993)", rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0 },
@@ -18,19 +19,20 @@ const LAM_U_STOPS = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 const DEFAULT = {
-  model: "linver_mcapwp", vintage: "2020:Q2", policy: "rule",
+  model: "linver_mcapwp", startVintage: "2020:Q2", endVintage: "2020:Q2", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
   lam_u: 1, lam_dr: 1,
   elb_on: true, years: 6,
 };
 
 const $ = (id) => document.getElementById(id);
-let meta, baselines, charts, state, pending = false, lastResult = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let meta, baselines, charts, state, pending = false, lastResult = null, runToken = 0;
 let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, solver off)
-let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg}, dirty } working copy of a baseline
+let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg,hggdp}, dirty } working copy of one vintage's baseline
 let dragOrig = null;
-let brush = "2";       // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
-const EDIT_VARS = ["rff", "pic4", "lur", "hggdp"];   // variable behind each chart panel
+let brush = "2";        // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
+const EDIT_VARS = ["rff", "pic4", "lur", "hggdp"];   // variable behind each chart panel, in edit mode
 
 // ---------- state <-> URL hash (shareable scenarios) ----------
 function readHash() {
@@ -42,8 +44,11 @@ function readHash() {
     else if (typeof DEFAULT[k] === "boolean") s[k] = v === "1";
     else s[k] = v;
   }
+  if (q.has("vintage") && !q.has("start") && !q.has("end")) s.startVintage = s.endVintage = q.get("vintage");
   if (!meta.models.some((m) => m.key === s.model)) s.model = DEFAULT.model;
-  if (!meta.vintages.some((v) => v.label === s.vintage)) s.vintage = DEFAULT.vintage;
+  if (!meta.vintages.some((v) => v.label === s.startVintage)) s.startVintage = DEFAULT.startVintage;
+  if (!meta.vintages.some((v) => v.label === s.endVintage)) s.endVintage = s.startVintage;
+  if (vintageYear(s.endVintage) < vintageYear(s.startVintage)) s.endVintage = s.startVintage;
   if (!["rule", "commitment"].includes(s.policy)) s.policy = DEFAULT.policy;
   s.lam_u = nearest(LAM_U_STOPS, s.lam_u);
   s.lam_dr = nearest(LAM_DR_STOPS, s.lam_dr);
@@ -63,21 +68,38 @@ function nearest(stops, v) {
   return stops.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
 }
 
+function vintageYear(label) {
+  const v = meta.vintages.find((x) => x.label === label);
+  return v ? v.year : -Infinity;
+}
+
+// Every dataset vintage from `startLabel` through `endLabel`, inclusive, in chronological order.
+function vintageSequence(startLabel, endLabel) {
+  const lo = vintageYear(startLabel), hi = vintageYear(endLabel);
+  return meta.vintages
+    .map((v, n) => ({ n, year: v.year }))
+    .filter((v) => v.year >= lo - 1e-9 && v.year <= hi + 1e-9)
+    .sort((a, b) => a.year - b.year)
+    .map((v) => v.n);
+}
+
 // ---------- controls ----------
 function buildControls() {
   const model = $("model");
   for (const m of meta.models) model.add(new Option(m.label, m.key));
 
-  const vintage = $("vintage");
-  const groups = {};
-  for (const v of meta.vintages) {
-    if (!groups[v.group]) {
-      groups[v.group] = document.createElement("optgroup");
-      groups[v.group].label = v.group;
+  for (const id of ["vintage-start", "vintage-end"]) {
+    const sel = $(id);
+    const groups = {};
+    for (const v of meta.vintages) {
+      if (!groups[v.group]) {
+        groups[v.group] = document.createElement("optgroup");
+        groups[v.group].label = v.group;
+      }
+      groups[v.group].appendChild(new Option(v.label, v.label));
     }
-    groups[v.group].appendChild(new Option(v.label, v.label));
+    Object.values(groups).forEach((g) => sel.appendChild(g));
   }
-  Object.values(groups).forEach((g) => vintage.appendChild(g));
 
   const presets = $("rule-presets");
   for (const [key, p] of Object.entries(RULE_PRESETS)) {
@@ -99,7 +121,15 @@ function buildControls() {
   }
 
   model.addEventListener("change", () => set({ model: model.value }));
-  vintage.addEventListener("change", () => set({ vintage: vintage.value }));
+  $("vintage-start").addEventListener("change", () => {
+    const startVintage = $("vintage-start").value;
+    const endVintage = vintageYear(state.endVintage) < vintageYear(startVintage) ? startVintage : state.endVintage;
+    set({ startVintage, endVintage });
+  });
+  $("vintage-end").addEventListener("change", () => {
+    const v = $("vintage-end").value;
+    set({ endVintage: vintageYear(v) < vintageYear(state.startVintage) ? state.startVintage : v });
+  });
   document.querySelectorAll("input[name=policy]").forEach((r) =>
     r.addEventListener("change", () => set({ policy: r.value })));
   // Sliders: the label follows the thumb while dragging; the scenario is recomputed on release.
@@ -142,7 +172,12 @@ function buildControls() {
 
 function syncControls() {
   $("model").value = state.model;
-  $("vintage").value = state.vintage;
+  $("vintage-start").value = state.startVintage;
+  $("vintage-end").value = state.endVintage;
+  const seq = vintageSequence(state.startVintage, state.endVintage);
+  $("sequence-hint").textContent = seq.length > 1
+    ? `${seq.length} SEP releases: the counterfactual updates as each one arrives, animated ${STEP_DELAY_MS / 1000}s apart.`
+    : "";
   document.querySelectorAll("input[name=policy]").forEach((r) => { r.checked = r.value === state.policy; });
   $("rule-controls").hidden = state.policy !== "rule";
   $("loss-controls").hidden = state.policy !== "commitment";
@@ -169,12 +204,12 @@ function syncControls() {
 }
 
 function set(patch) {
-  if (patch.vintage && patch.vintage !== state.vintage && edits?.dirty &&
-      !confirm("Changing the projection discards your edits. Continue?")) {
+  if (patch.startVintage && patch.startVintage !== state.startVintage && edits?.dirty &&
+      !confirm("Changing the policy start date discards your edits. Continue?")) {
     syncControls();
     return;
   }
-  if (patch.vintage && patch.vintage !== state.vintage) edits = null;
+  if (patch.startVintage && patch.startVintage !== state.startVintage) edits = null;
   state = { ...state, ...patch };
   syncControls();
   writeHash();
@@ -193,6 +228,7 @@ function schedule() {
 
 async function run() {
   const s = state;
+  const myToken = ++runToken;   // any later call to run() invalidates this one, mid-animation or not
   const status = $("status");
   document.body.classList.add("busy");
   let model;
@@ -200,12 +236,11 @@ async function run() {
     model = await loadModel(DATA_DIR, meta, s.model);
   } catch (e) {
     status.textContent = `Could not load model data (${e.message}).`;
+    document.body.classList.remove("busy");
     return;
   }
-  if (s !== state) return;   // superseded while loading
+  if (myToken !== runToken) return;   // superseded while loading
 
-  const n = meta.vintages.findIndex((v) => v.label === s.vintage);
-  const t0 = meta.vintages[n].t0;
   if (mode === "edit") {
     document.body.classList.remove("busy");
     ensureEdits();
@@ -213,45 +248,69 @@ async function run() {
     renderEdit();
     return;
   }
-  const base = edits ? edits.base : baselines[n];
-  const yb = baselineWindow(base, t0, meta.T);
+
+  const seq = vintageSequence(s.startVintage, s.endVintage);
+  const t0First = meta.vintages[seq[0]].t0, t0Final = meta.vintages[seq.at(-1)].t0;
+  const dispRange = { start: t0First - HISTORY_Q, end: Math.min(meta.dates.length, t0Final + 4 * s.years), markIndex: HISTORY_Q };
   const policy = s.policy === "rule"
     ? { type: "rule", rho: s.rho, phi_pi: s.phi_pi, phi_u: s.phi_u, phi_du: s.phi_du }
     : { type: "commitment", lam_u: s.lam_u, lam_dr: s.lam_dr };
+  const runner = createSequenceRunner(model, policy, { useElb: s.elb_on, elb: meta.elb });
 
-  let out;
-  const t = performance.now();
-  try {
-    out = solve(model, yb, policy, { useElb: s.elb_on, elb: meta.elb });
-  } catch (e) {
-    status.textContent = `No solution for these settings: ${e.message}`;
-    status.dataset.kind = "error";
-    document.body.classList.remove("busy");
-    return;
+  let lastLcp = { converged: true, bindingQuarters: 0 }, stoppedAt = -1, usedEdit = false;
+  for (let i = 0; i < seq.length; i++) {
+    const n = seq[i];
+    const isEditedStep = !!(edits?.dirty && edits.vintage === meta.vintages[n].label);
+    if (isEditedStep) usedEdit = true;
+    const full = isEditedStep ? edits.base : baselines[n];
+
+    let out;
+    try {
+      out = runner.step(full, meta.vintages[n].t0);
+    } catch (e) {
+      status.textContent = `No solution for these settings: ${e.message}`;
+      status.dataset.kind = "error";
+      document.body.classList.remove("busy");
+      return;
+    }
+    if (myToken !== runToken) return;
+
+    const bad = Object.values(out.Y).some((a) => a.some((v) => !Number.isFinite(v) || Math.abs(v) > 1e3));
+    if (bad) {
+      status.textContent = s.policy === "rule"
+        ? "These settings produce an explosive path. Try a stronger response to inflation."
+        : "These settings produce an explosive path. Try a larger rate-change weight.";
+      status.dataset.kind = "error";
+      document.body.classList.remove("busy");
+      return;
+    }
+
+    lastLcp = out.lcp;
+    const converged = !s.elb_on || out.lcp.converged;
+    lastResult = render(s, full, meta.vintages[n].t0, out.Y, dispRange, converged, isEditedStep);
+    if (!converged) { stoppedAt = i; break; }
+
+    if (i < seq.length - 1) {
+      status.textContent = `Updating through ${meta.vintages[seq[i + 1]].label}… (${i + 1} of ${seq.length})`;
+      status.dataset.kind = "";
+      await sleep(STEP_DELAY_MS);
+      if (myToken !== runToken) return;
+    }
   }
-  const ms = performance.now() - t;
   document.body.classList.remove("busy");
 
-  const bad = Object.values(out.Y).some((a) => a.some((v) => !Number.isFinite(v) || Math.abs(v) > 1e3));
-  if (bad) {
-    status.textContent = s.policy === "rule"
-      ? "These settings produce an explosive path. Try a stronger response to inflation."
-      : "These settings produce an explosive path. Try a larger rate-change weight.";
-    status.dataset.kind = "error";
-    return;
-  }
   const bits = [];
-  if (s.elb_on) {
-    const q = out.lcp.bindingQuarters;
-    if (!out.lcp.converged) bits.push("No solution with the ELB was found for these settings, so no counterfactual is shown. Untick the ELB box to see the unconstrained path.");
-    else bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the projection.` : "ELB does not bind.");
+  if (stoppedAt >= 0) {
+    bits.push(`No solution with the ELB was found updating to ${meta.vintages[seq[stoppedAt]].label}; the sequence ` +
+      "stops there. Untick the ELB box to see the unconstrained path.");
+  } else if (s.elb_on) {
+    const q = lastLcp.bindingQuarters;
+    bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the final projection.` : "ELB does not bind in the final projection.");
   }
-  if (edits?.dirty) bits.push("Using your edited baseline.");
-  bits.push(`Computed in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms.`);
+  if (usedEdit) bits.push("Using your edited projection.");
+  bits.push(seq.length > 1 ? `${seq.length} updates computed.` : "Computed.");
   status.textContent = bits.join(" ");
-  status.dataset.kind = out.lcp.converged ? "" : "error";
-
-  lastResult = render(s, n, t0, base, out.Y, out.D, out.lcp.converged);
+  status.dataset.kind = stoppedAt >= 0 ? "error" : "";
 }
 
 // GDP growth: the SEP database may or may not carry a baseline path for it (see tools/export_data.py).
@@ -259,19 +318,20 @@ const hasGrowthBase = () => meta.bvars.includes("hggdp");
 // Long-run GDP growth: the terminal value of the baseline path (the database has no separate long-run series).
 const terminal = (path) => path[path.length - 1];
 const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
-const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus SEP-consistent projection (pp)";
 
-function render(s, n, t0, base, Y, D, converged = true) {
-  const start = t0 - HISTORY_Q, H = 4 * s.years, end = t0 + H;
+// full: the CURRENT step's own baseline (real or, for the one edited vintage, edited) -- used for the
+// gray "SEP-consistent projection" line and the dashed reference lines, which are this vintage's own view.
+// Y: the sequence runner's running, absolute-date-indexed accumulation -- the blue "Counterfactual" line,
+// reflecting every update honored so far plus this vintage's own forward projection beyond its own date.
+function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isEditedStep = false) {
   const labels = [], idx = [];
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
-  const markIndex = HISTORY_Q;
   // counterfactual starts at the last data point so the line departs from history
-  const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base[v][i] : Y[v][i - t0]));
-  const bl = (v) => idx.map((i) => base[v][i]);
-  const blLabel = edits?.dirty ? "Edited projection" : "SEP-consistent projection";
+  const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? full[v][i] : Y[v][i]));
+  const bl = (v) => idx.map((i) => full[v][i]);
+  const blLabel = isEditedStep ? "Edited projection" : "SEP-consistent projection";
 
-  const longrun = idx.map((i) => base.rstar[i] + base.pitarg[i]);
+  const longrun = idx.map((i) => full.rstar[i] + full.pitarg[i]);
   const panels = [
     {
       series: [
@@ -290,47 +350,42 @@ function render(s, n, t0, base, Y, D, converged = true) {
     },
     {
       series: [
-        { label: "Natural rate", values: idx.map((i) => (i < t0 ? base.lurnat[i] : Y.lurnat[i - t0])), cls: "ref" },
+        { label: "Natural rate", values: idx.map((i) => (i < t0 ? full.lurnat[i] : Y.lurnat[i])), cls: "ref" },
         { label: blLabel, values: bl("lur"), cls: "base" },
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
     },
-    hasGrowthBase()
-      ? {
-        title: GROWTH_TITLE,
-        series: [
-          { label: "Long-run growth", values: idx.map(() => terminal(base.hggdp)), cls: "ref" },
-          { label: blLabel, values: bl("hggdp"), cls: "base" },
-          { label: "Counterfactual", values: idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base.hggdp[i] : base.hggdp[i] + D.hggdp[i - t0])), cls: "cf" },
-        ],
-      }
-      : {
-        title: GROWTH_DIFF_TITLE,
-        series: [
-          { label: "SEP-consistent projection", values: idx.map(() => 0), cls: "ref" },
-          { label: "Counterfactual", values: idx.map((i) => (i < t0 - 1 ? null : i < t0 ? 0 : D.hggdp[i - t0])), cls: "cf" },
-        ],
-      },
   ];
+  if (hasGrowthBase()) {
+    panels.push({
+      title: GROWTH_TITLE,
+      series: [
+        { label: "Long-run growth", values: idx.map(() => terminal(full.hggdp)), cls: "ref" },
+        { label: blLabel, values: bl("hggdp"), cls: "base" },
+        { label: "Counterfactual", values: cf("hggdp"), cls: "cf" },
+      ],
+    });
+  }
   // No ELB solution: draw only the baseline and reference lines.
   if (!converged) for (const p of panels) p.series = p.series.filter((ser) => ser.cls !== "cf");
   charts.update({ labels, panels, markIndex });
   $("proj-note").textContent =
-    `Shaded: data before the ${s.vintage} SEP. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
+    `Shaded: data before ${s.startVintage}. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
   return { labels, panels, s };
 }
 
 // ---------- baseline editing ----------
+// Edit mode always targets the "Policy start date" vintage; "update through" is hidden while editing.
 function ensureEdits() {
-  if (edits && edits.vintage === state.vintage) return;
-  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  if (edits && edits.vintage === state.startVintage) return;
+  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
   const base = {};
   for (const k of Object.keys(baselines[n])) base[k] = Float64Array.from(baselines[n][k]);
-  edits = { vintage: state.vintage, base, dirty: false };
+  edits = { vintage: state.startVintage, base, dirty: false };
 }
 
 function levelIndex() {
-  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
   return Math.min(meta.dates.length - 1, meta.vintages[n].t0 + meta.T - 1);
 }
 
@@ -360,7 +415,7 @@ const PHASE_IN_Q = 12;
 function setLevel(k, value) {
   if (!Number.isFinite(value)) return syncEditPanel();
   ensureEdits();
-  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
   const t0 = meta.vintages[n].t0;
   const li = levelIndex();
   if (k === "gstar") {   // long-run growth is the terminal value of the growth path itself; shift the path toward it
@@ -389,7 +444,7 @@ function onDragStart(k) {
 }
 
 function onDrag(k, i, dv) {
-  const n = meta.vintages.findIndex((v) => v.label === state.vintage);
+  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
   const t0 = meta.vintages[n].t0, centre = t0 - HISTORY_Q + i;
   const sigma = Number(brush);
   const arr = edits.base[EDIT_VARS[k]];
@@ -403,7 +458,7 @@ function onDrag(k, i, dv) {
 
 function renderEdit() {
   const s = state;
-  const n = meta.vintages.findIndex((v) => v.label === s.vintage);
+  const n = meta.vintages.findIndex((v) => v.label === s.startVintage);
   const t0 = meta.vintages[n].t0, orig = baselines[n], cur = edits.base;
   const start = t0 - HISTORY_Q, end = t0 + 4 * s.years;
   const idx = [], labels = [];
@@ -429,7 +484,7 @@ function renderEdit() {
     ? "Baseline edited. Switch to Counterfactual to compute policy against it."
     : "Editing mode: drag a projection line, or change the long-run levels on the left.";
   status.dataset.kind = "";
-  $("proj-note").textContent = `Shaded: data before the ${s.vintage} SEP. Only projected quarters can be edited.`;
+  $("proj-note").textContent = `Shaded: data before ${s.startVintage}. Only projected quarters can be edited.`;
   charts.update({ labels, panels, markIndex, editable: true });
   lastResult = { labels, panels, s };
 }
@@ -440,6 +495,8 @@ function setMode(m) {
   $("policy-section").hidden = $("elb-section").hidden = m === "edit";
   $("edit-section").hidden = m !== "edit";
   $("brush-bar").hidden = m !== "edit";
+  $("vintage-end").closest("label").hidden = m === "edit";
+  $("sequence-hint").hidden = m === "edit";
   if (m === "edit") { ensureEdits(); syncEditPanel(); }
   schedule();
 }
@@ -447,7 +504,7 @@ function setMode(m) {
 function downloadCsv() {
   if (!lastResult) return;
   const { labels, panels, s } = lastResult;
-  const names = ["rff", "inflation", "unemployment", hasGrowthBase() ? "GDP growth" : "GDP growth minus projection"];
+  const names = ["rff", "inflation", "unemployment", "GDP growth"];
   const cols = [];
   panels.forEach((p, k) => p.series.forEach((ser) => cols.push({ name: `${names[k]} ${ser.label}`, values: ser.values })));
   const lines = [
@@ -458,7 +515,8 @@ function downloadCsv() {
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `counterfactual_${s.model}_${s.vintage.replace(":", "")}_${s.policy}.csv`;
+  const range = s.startVintage === s.endVintage ? s.startVintage.replace(":", "") : `${s.startVintage.replace(":", "")}-${s.endVintage.replace(":", "")}`;
+  a.download = `counterfactual_${s.model}_${range}_${s.policy}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -481,7 +539,7 @@ async function main() {
     { title: "Federal funds rate (%)" },
     { title: "Inflation, 4-quarter PCE (%)" },
     { title: "Unemployment rate (%)" },
-    { title: GROWTH_TITLE },
+    ...(meta.bvars.includes("hggdp") ? [{ title: GROWTH_TITLE }] : []),
   ], { onDragStart, onDrag });
   buildControls();
   state = readHash();

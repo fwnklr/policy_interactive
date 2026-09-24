@@ -11,9 +11,11 @@
 <body>
 <header class="site">
   <h1>Policy counterfactuals</h1>
-  <p class="lede">What would the economy have looked like under a different monetary policy? Pick an
-    SEP-consistent projection and a model, then choose a policy rule or optimal control. Each
-    counterfactual is computed in your browser.</p>
+  <p class="lede">What would the economy have looked like under a different monetary policy? Pick a
+    policy start date and a model, then choose a policy rule or optimal control. Move "update
+    projection through" forward to see the counterfactual updated as each subsequent SEP-consistent
+    projection arrived, exactly as it would have been decided in real time. Each counterfactual is
+    computed in your browser.</p>
   <fieldset class="segmented modes">
     <legend class="sr">Mode</legend>
     <label><input type="radio" name="mode" value="cf" checked autocomplete="off"> Counterfactual</label>
@@ -24,9 +26,13 @@
 <main>
   <aside class="controls" aria-label="Scenario settings">
     <section>
-      <label class="field">SEP-consistent projection
-        <select id="vintage"></select>
+      <label class="field">Policy start date
+        <select id="vintage-start"></select>
       </label>
+      <label class="field">Update projection through
+        <select id="vintage-end"></select>
+      </label>
+      <p class="hint" id="sequence-hint"></p>
       <label class="field">Model
         <select id="model"></select>
       </label>

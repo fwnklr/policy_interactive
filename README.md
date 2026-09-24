@@ -5,9 +5,12 @@ Interactive policy counterfactuals in sequence space, based on
 Hebden, J. and F. Winkler (2026), "Computation of policy counterfactuals in sequence space",
 *Journal of Economic Dynamics and Control* 182, 105228. https://doi.org/10.1016/j.jedc.2025.105228
 
-Pick an SEP baseline and a model (FRB/US-LINVER or DGS-FHP), choose a simple interest-rate
-rule or optimal commitment, set the rule coefficients or loss weights, and toggle the
-effective lower bound. Counterfactuals are computed in the browser.
+Pick a policy start date and a model, choose a simple interest-rate rule or optimal control,
+set the rule coefficients or loss weights, and toggle the effective lower bound. Move "update
+projection through" forward to see the counterfactual sequentially updated as each subsequent
+SEP-consistent projection arrives — honoring whatever was already committed, exactly as the
+paper's recursive revision scheme prescribes (Section 5) — animated one step at a time.
+Counterfactuals are computed in the browser.
 
 **Live:** https://fwnklr.github.io/policy_interactive/
 
@@ -26,16 +29,22 @@ Requires the replication package next to this folder (`../replication`) and
 `numpy`/`scipy`.
 
 ```bash
-python3 tools/export_data.py      # writes web/data/
-python3 tools/make_reference.py   # solves test cases with the replication Python solver
-python3 -m http.server 8765       # then open http://localhost:8765/tools/test/check.html
+python3 tools/export_data.py               # writes web/data/
+python3 tools/make_reference.py            # single-vintage test cases (replication Python solver)
+python3 tools/make_reference_sequence.py   # multi-vintage (sequential-updating) test cases
+python3 -m http.server 8765                # then open:
+#   http://localhost:8765/tools/test/check.html            (single vintage, web/js/solver.js `solve`)
+#   http://localhost:8765/tools/test/check_sequence.html   (multi-vintage, `createSequenceRunner`)
 ```
 
-The check page runs the JavaScript solver on every reference case (3 models × 4
-baselines × simple rules and commitment, with and without the ELB) and reports
-the largest deviation from the Python solution.
+`check.html` runs the JavaScript solver on every single-baseline reference case (3 models × 4
+baselines × simple rules and commitment, with and without the ELB) and reports the largest
+deviation from the Python solution. `check_sequence.html` does the same for chronological
+sequences of several SEP-consistent projections, checking `createSequenceRunner`'s recursive
+updating (used whenever "update projection through" is later than "policy start date") against
+`irfoc.modelsolver.ModelSolver.solve()` called with the full baseline stack — the paper's own
+recursive revision scheme, unabridged.
 
-Differences from the replication code: one baseline at a time (no re-optimization
-across SEP vintages), and an ELB complementarity tolerance of 1e-7 instead of 1e-3,
-which makes the binding set, and therefore the solution, independent of the
-random seed of the search heuristic.
+Differences from the replication code: an ELB complementarity tolerance of 1e-7 instead of 1e-3,
+which makes the binding set, and therefore the solution, independent of the random seed of the
+search heuristic.

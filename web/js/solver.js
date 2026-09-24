@@ -163,3 +163,100 @@ export function solve(model, yb, policy, { useElb = true, elb = 0.125, seed = 1,
   for (const v of DEVIATION_VARS) D[v] = matvec(M[v], x);
   return { Y, D, x, lcp };
 }
+
+
+// ---------------------------------------------------------------------------
+// Sequential updating: walk through a chronological list of SEP-consistent
+// projections, honoring whatever was already committed under earlier vintages
+// and only feeding the REVISION to the baseline through the model at each new
+// release -- the paper's mechanism for tracking a counterfactual across many
+// updates (Hebden & Winkler, Section 5). A single-vintage `solve()` call above
+// is the degenerate one-step case of this recursion (with the "previous"
+// baseline and multiplier both zero); createSequenceRunner is written so that
+// calling `.step()` exactly once on the first vintage reproduces `solve()`
+// bit-for-bit.
+//
+// full: a vintage's FULL-length (Nd-quarter) baseline, keyed like `base` in
+//       baselineWindow but never windowed -- i.e. loadBaselines()'s per-vintage
+//       objects. All vintages passed to one runner must share the same Nd and
+//       the same set of keys (guaranteed since they come from one meta.json).
+export function createSequenceRunner(model, policy, { useElb = true, elb = 0.125, seed = 1, lcpTol = 1e-7 } = {}) {
+  const { T, M } = model;
+  const CANDIDATE_VARS = [...OUTPUT_VARS, ...DEVIATION_VARS];
+  let Yrun = null, Urun = null, prevFull = null, Nd = 0, trackedVars = null;
+
+  function step(full, t0) {
+    if (Yrun === null) {
+      Nd = full.rff.length;
+      trackedVars = CANDIDATE_VARS.filter((v) => v in full);
+      Yrun = {};
+      for (const v of trackedVars) Yrun[v] = new Float64Array(Nd);
+      Urun = new Float64Array(Nd);
+      prevFull = {};
+      for (const k of Object.keys(full)) prevFull[k] = new Float64Array(Nd);
+    }
+    const diff = {};
+    for (const k of Object.keys(full)) {
+      const f = full[k], p = prevFull[k], d = new Float64Array(Nd);
+      for (let i = 0; i < Nd; i++) d[i] = f[i] - p[i];
+      diff[k] = d;
+    }
+    for (const v of trackedVars) {
+      const Y = Yrun[v], d = diff[v];
+      for (let i = 0; i < Nd; i++) Y[i] += d[i];
+    }
+    const yb = baselineWindow(diff, t0, T);
+    const sys = policy.type === "rule" ? ruleSystem(model, yb, policy) : commitmentSystem(model, yb, policy);
+    const F = lu(sys.G);
+    if (F.singular) throw new Error("Policy system is singular for these parameters.");
+    const xhat = luSolve(F, sys.c.map((v) => -v));
+    let lcp = { converged: true, method: "none", bindingQuarters: 0 };
+
+    if (useElb) {
+      const { Tc } = sys;
+      const Mr = mat(Tc, T, M.rff.a.slice(0, Tc * T));
+      const H = rightDivide(Mr, F);
+      const rxHat = matvec(Mr, xhat);
+      const uOld = Urun.slice(t0, t0 + Tc);
+      let QQ;
+      if (sys.Pu) {
+        const PuC = mat(T, Tc);
+        for (let i = 0; i < T; i++) for (let j = 0; j < Tc; j++) PuC.a[i * Tc + j] = sys.Pu.a[i * T + j];
+        QQ = matmul(H, PuC);
+      } else {
+        QQ = mat(Tc, Tc);
+        for (let i = 0; i < Tc; i++) for (let j = 0; j < Tc; j++) QQ.a[i * Tc + j] = H.a[i * T + j];
+      }
+      // q also subtracts QQ@uOld: Yrun.rff already has u(n-1)'s effect baked in (from the previous
+      // step's overwrite below), so this undoes double-counting it before solving for u(n) fresh.
+      const QQuOld = matvec(QQ, uOld);
+      const q = Float64Array.from({ length: Tc }, (_, t) => Yrun.rff[t0 + t] - elb + rxHat[t] - QQuOld[t]);
+      const res = solveLCP(QQ, q, { seed, tol: lcpTol });
+      lcp = { converged: res.converged, method: res.method, bindingQuarters: res.u.filter((v) => v > 0).length };
+      const uHat = res.u.map((v, i) => v - uOld[i]);
+      let PuuHat = new Float64Array(T);
+      if (sys.Pu) {
+        for (let i = 0; i < T; i++) {
+          let s = 0;
+          for (let j = 0; j < Tc; j++) s += sys.Pu.a[i * T + j] * uHat[j];
+          PuuHat[i] = s;
+        }
+      } else {
+        PuuHat.set(uHat);
+      }
+      const dxhat = luSolve(F, PuuHat);
+      for (let t = 0; t < T; t++) xhat[t] += dxhat[t];
+      for (let t = 0; t < Tc; t++) Urun[t0 + t] = res.u[t];
+    }
+
+    for (const v of trackedVars) {
+      const Mxhat = matvec(M[v], xhat);
+      const Y = Yrun[v];
+      for (let t = 0; t < T && t0 + t < Nd; t++) Y[t0 + t] += Mxhat[t];
+    }
+    prevFull = full;
+    return { Y: Yrun, lcp };
+  }
+
+  return { step };
+}

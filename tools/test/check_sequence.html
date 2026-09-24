@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sequence solver check</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td, th { padding: 2px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+  .fail { color: #b00020; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>JS sequence solver vs. Python reference</h1>
+<p>Validates <code>createSequenceRunner</code> (sequential/recursive updating across several
+  SEP-consistent projections) against <code>irfoc.modelsolver.ModelSolver.solve()</code> called with
+  the full baseline stack -- see <code>tools/make_reference_sequence.py</code>. This is the one thing
+  <a href="check.html">check.html</a> cannot exercise (it only ever solves one vintage at a time).</p>
+<p id="summary">Running…</p>
+<table id="tbl"><thead><tr>
+  <th>model</th><th>sequence</th><th>N</th><th>policy</th><th>ELB</th><th>max |diff|</th><th>last-step LCP</th><th>ms</th>
+</tr></thead><tbody></tbody></table>
+<script type="module">
+import { loadMeta, loadModel, loadBaselines } from "../../web/js/data.js";
+import { createSequenceRunner } from "../../web/js/solver.js";
+
+const TOL = 1e-6;
+const dir = "../../web/data";
+const meta = await loadMeta(dir);
+const baselines = await loadBaselines(dir, meta);
+const ref = await (await fetch("reference_sequence.json")).json();
+const labels = meta.vintages.map((v) => v.label);
+const TRACKED = ["rff", "pic4", "lur", "lurnat", "xgap2", "hggdp"];
+const rows = [];
+let worst = 0, nfail = 0, nskip = 0, totalMs = 0;
+
+for (const c of ref.cases) {
+  const model = await loadModel(dir, meta, c.model);
+  const policy = { type: c.policy, ...c.params };
+  const runner = createSequenceRunner(model, policy, { useElb: c.use_elb, elb: c.elb });
+  const t = performance.now();
+  let out;
+  for (const vlab of c.vintages) {
+    const n = labels.indexOf(vlab);
+    out = runner.step(baselines[n], meta.vintages[n].t0);
+  }
+  const ms = performance.now() - t;
+  totalMs += ms;
+  let d = 0;
+  for (const v of TRACKED) {
+    if (!(v in out.Y)) continue;   // e.g. hggdp, if this data build has no growth baseline
+    for (let i = 0; i < c.Y[v].length; i++) d = Math.max(d, Math.abs(out.Y[v][i] - c.Y[v][i]));
+  }
+  const skipped = c.converged === false;
+  const fail = skipped ? false : (!(d < TOL) || !out.lcp.converged);
+  if (fail) nfail++;
+  if (skipped) nskip++; else worst = Math.max(worst, d);
+  rows.push({ c, d: skipped ? NaN : d, ms, lcp: out.lcp, fail, skipped });
+}
+
+document.querySelector("#tbl tbody").innerHTML = rows.map(({ c, d, ms, lcp, fail }) =>
+  `<tr class="${fail ? "fail" : ""}"><td>${c.model}</td><td>${c.sequence}</td><td>${c.vintages.length}</td>` +
+  `<td>${c.policy}:${c.name}</td><td>${c.use_elb ? c.elb : "off"}</td><td>${d.toExponential(2)}</td>` +
+  `<td>${lcp.method}${lcp.bindingQuarters ? " (" + lcp.bindingQuarters + "q)" : ""}</td><td>${ms.toFixed(1)}</td></tr>`).join("");
+const summary = `${ref.cases.length} cases, ${nfail} failures, ${nskip} not compared (no Python ELB solution), ` +
+  `worst |diff| = ${worst.toExponential(2)}, mean ${(totalMs / ref.cases.length).toFixed(1)} ms/sequence`;
+document.getElementById("summary").textContent = summary;
+window.CHECK = { summary, nfail, worst, rows: rows.map((r) => ({ ...r, c: undefined,
+  key: `${r.c.model} ${r.c.sequence} ${r.c.policy}:${r.c.name} ${r.c.use_elb ? r.c.elb : "off"}` })) };
+</script>
+</body>
+</html>
