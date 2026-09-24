@@ -53,7 +53,7 @@ LOSSES = {
     "highpi": dict(lam_u=0.0, lam_dr=0.01),
     "custom": dict(lam_u=0.25, lam_dr=0.5),
 }
-VINTAGES = ["2020:Q2", "2021:Q4", "2023:Q4", "2015:Q1"]
+VINTAGES = ["2015:Q2", "2020:Q2", "2021:Q4", "2023:Q4", "2026:Q2"]
 # hggdp has no baseline in the database, so its reference "path" is the deviation from baseline.
 
 
@@ -83,6 +83,8 @@ def full_Ybase(Bn, bvars, elb):
     nd = Bn.shape[1]
     Y = np.zeros((J, nd))
     for k, v in enumerate(bvars):
+        if v == "hggdp":
+            continue   # the reference reports the growth *response* (deviation from baseline), baseline = 0
         Y[vj[v]] = Bn[k]
     Y[vj["lagrff"], 1:] = Y[vj["rff"], :-1]
     Y[vj["lagrff"], 0] = Y[vj["rff"], 0]

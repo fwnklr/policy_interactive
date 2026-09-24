@@ -25,7 +25,7 @@ REPO = os.path.dirname(HERE)
 REPL = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "..", "replication"))
 sys.path.insert(0, os.path.join(REPL, "python"))
 
-from irfoc.io_mat import load_dynare_results, load_tb_data  # noqa: E402
+from irfoc.io_mat import load_dynare_results, load_mat  # noqa: E402
 
 OUT = os.path.join(REPO, "web", "data")
 T = 200
@@ -41,15 +41,17 @@ MODELS = {
     "sw": {"file": "sw_results.mat", "label": "Smets\u2013Wouters (2007)"},
 }
 
-# Baselines: one database (data/sep_data.mat) with a per-vintage is_covid flag.  Vintage values collide
-# across the two pools (2021.0 appears in both), so pools are told apart by the flag.  The pre-covid
-# pool's 2021.0 entry is a realized-data path (used only as a plotting reference in the paper), not an
-# SEP baseline, so it is dropped.
-GROUPS = [(True, "SEP 2020\u20132023"), (False, "SEP 2014\u20132016")]
-
-
-def dropped(v, is_covid):
-    return (not is_covid) and abs(v - 2021.0) < 1e-9
+# Baselines: one database (data/sep_data.mat), one entry per SEP vintage.  Vintage labels are unique.
+def load_sep(path):
+    """Read sep_data.mat (struct `sep_data`, or `tb_data` in older versions) into plain arrays."""
+    d = load_mat(path)
+    tb = d.get("sep_data", d.get("tb_data"))
+    if tb is None:
+        raise KeyError(f"neither 'sep_data' nor 'tb_data' found in {path}")
+    varj = {k: int(v) - 1 for k, v in tb["varj"].items()}
+    return (np.asarray(tb["Ybase"], dtype=float), varj,
+            np.atleast_1d(np.asarray(tb["dates"], dtype=float)),
+            np.atleast_1d(np.asarray(tb["vintages"], dtype=float)))
 
 
 def quarter_label(x: float) -> str:
@@ -72,27 +74,25 @@ def export_models(meta):
 
 
 def export_baselines(meta):
-    tb = load_tb_data(os.path.join(REPL, "data", "sep_data.mat"))
-    dates = tb.dates
-    keep = [n for n, v in enumerate(tb.vintages) if not dropped(v, bool(tb.is_covid[n]))]
+    Ybase, varj, dates, vint = load_sep(os.path.join(REPL, "data", "sep_data.mat"))
     bvars = list(BVARS)
     for k in OPTIONAL_BVARS:
-        if k in tb.varj and not np.isnan(tb.Ybase[tb.varj[k]][:, keep]).any():
+        if k in varj and not np.isnan(Ybase[varj[k]]).any():
             bvars.append(k)
         else:
             print(f"note: baseline variable '{k}' not (fully) in sep_data.mat; not exported")
     meta["bvars"] = bvars
+    order = np.argsort(vint, kind="stable")
     blocks, vintages = [], []
-    for covid, group in GROUPS:
-        for n, v in enumerate(tb.vintages):
-            if bool(tb.is_covid[n]) != covid or dropped(v, covid):
-                continue
-            Y = np.stack([tb.Ybase[tb.varj[k], :, n] for k in bvars])
-            assert not np.isnan(Y).any(), f"NaN in baseline {v} ({group})"
-            blocks.append(Y)
-            # 0-based index of the first simulated period (= vintage quarter)
-            t0 = int(round((v - dates[0]) * 4))
-            vintages.append({"label": quarter_label(v), "year": float(v), "group": group, "t0": t0})
+    for n in order:
+        v = vint[n]
+        Y = np.stack([Ybase[varj[k], :, n] for k in bvars])
+        assert not np.isnan(Y).any(), f"NaN in baseline {v}"
+        blocks.append(Y)
+        # 0-based index of the first simulated period (= vintage quarter)
+        t0 = int(round((v - dates[0]) * 4))
+        assert t0 + T <= len(dates), f"baseline {v} does not cover the {T}-quarter horizon"
+        vintages.append({"label": quarter_label(v), "year": float(v), "group": str(int(np.floor(v + 1e-9))), "t0": t0})
     labels = [v["label"] for v in vintages]
     assert len(set(labels)) == len(labels), "duplicate vintage labels"
     np.stack(blocks).astype("<f4").tofile(os.path.join(OUT, "baselines.bin"))
