@@ -43,15 +43,12 @@ MODELS = {
 
 # Baselines: one database (data/sep_data.mat), one entry per SEP vintage.  Vintage labels are unique.
 def load_sep(path):
-    """Read sep_data.mat (struct `sep_data`, or `tb_data` in older versions) into plain arrays."""
-    d = load_mat(path)
-    tb = d.get("sep_data", d.get("tb_data"))
-    if tb is None:
-        raise KeyError(f"neither 'sep_data' nor 'tb_data' found in {path}")
-    varj = {k: int(v) - 1 for k, v in tb["varj"].items()}
-    return (np.asarray(tb["Ybase"], dtype=float), varj,
-            np.atleast_1d(np.asarray(tb["dates"], dtype=float)),
-            np.atleast_1d(np.asarray(tb["vintages"], dtype=float)))
+    """Read the struct `sep_data` in sep_data.mat into plain arrays."""
+    sep = load_mat(path)["sep_data"]
+    varj = {k: int(v) - 1 for k, v in sep["varj"].items()}
+    return (np.asarray(sep["Ybase"], dtype=float), varj,
+            np.atleast_1d(np.asarray(sep["dates"], dtype=float)),
+            np.atleast_1d(np.asarray(sep["vintages"], dtype=float)))
 
 
 def quarter_label(x: float) -> str:

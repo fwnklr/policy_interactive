@@ -243,7 +243,7 @@ async function run() {
   const bits = [];
   if (s.elb_on) {
     const q = out.lcp.bindingQuarters;
-    if (!out.lcp.converged) bits.push("No solution that respects the ELB was found for these settings; the path shown ignores it.");
+    if (!out.lcp.converged) bits.push("No solution with the ELB was found for these settings, so no counterfactual is shown. Untick the ELB box to see the unconstrained path.");
     else bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the projection.` : "ELB does not bind.");
   }
   if (edits?.dirty) bits.push("Using your edited baseline.");
@@ -251,7 +251,7 @@ async function run() {
   status.textContent = bits.join(" ");
   status.dataset.kind = out.lcp.converged ? "" : "error";
 
-  lastResult = render(s, n, t0, base, out.Y, out.D);
+  lastResult = render(s, n, t0, base, out.Y, out.D, out.lcp.converged);
 }
 
 // GDP growth: the SEP database may or may not carry a baseline path for it (see tools/export_data.py).
@@ -259,7 +259,7 @@ const hasGrowthBase = () => meta.bvars.includes("hggdp");
 const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
 const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus baseline (pp)";
 
-function render(s, n, t0, base, Y, D) {
+function render(s, n, t0, base, Y, D, converged = true) {
   const start = t0 - HISTORY_Q, H = 4 * s.years, end = t0 + H;
   const labels = [], idx = [];
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
@@ -310,6 +310,8 @@ function render(s, n, t0, base, Y, D) {
         ],
       },
   ];
+  // No ELB solution: draw only the baseline and reference lines.
+  if (!converged) for (const p of panels) p.series = p.series.filter((ser) => ser.cls !== "cf");
   charts.update({ labels, panels, markIndex });
   $("proj-note").textContent =
     `Shaded: data before the ${s.vintage} SEP. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
