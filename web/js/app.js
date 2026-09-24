@@ -301,14 +301,14 @@ function render(s, n, t0, base, Y, D, converged = true) {
         series: [
           { label: "Long-run growth", values: idx.map(() => terminal(base.hggdp)), cls: "ref" },
           { label: blLabel, values: bl("hggdp"), cls: "base" },
-          { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : base.hggdp[i] + D.hggdp[i - t0])), cls: "cf" },
+          { label: "Counterfactual", values: idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base.hggdp[i] : base.hggdp[i] + D.hggdp[i - t0])), cls: "cf" },
         ],
       }
       : {
         title: GROWTH_DIFF_TITLE,
         series: [
           { label: "Baseline", values: idx.map(() => 0), cls: "ref" },
-          { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : D.hggdp[i - t0])), cls: "cf" },
+          { label: "Counterfactual", values: idx.map((i) => (i < t0 - 1 ? null : i < t0 ? 0 : D.hggdp[i - t0])), cls: "cf" },
         ],
       },
   ];
