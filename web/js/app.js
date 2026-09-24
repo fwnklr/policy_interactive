@@ -268,13 +268,12 @@ function render(s, n, t0, base, Y, D, converged = true) {
   const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base[v][i] : Y[v][i - t0]));
   const bl = (v) => idx.map((i) => base[v][i]);
   const blLabel = edits?.dirty ? "Edited baseline" : "SEP baseline";
-  const proj = (arr) => arr.map((v, k) => (k < markIndex ? null : v));
 
   const longrun = idx.map((i) => base.rstar[i] + base.pitarg[i]);
   const panels = [
     {
       series: [
-        { label: "Long-run rate", values: proj(longrun), cls: "ref" },
+        { label: "Long-run rate", values: longrun, cls: "ref" },
         { label: blLabel, values: bl("rff"), cls: "base" },
         { label: "Counterfactual", values: cf("rff"), cls: "cf" },
       ],
@@ -282,14 +281,14 @@ function render(s, n, t0, base, Y, D, converged = true) {
     },
     {
       series: [
-        { label: "Target", values: proj(bl("pitarg")), cls: "ref" },
+        { label: "Target", values: bl("pitarg"), cls: "ref" },
         { label: blLabel, values: bl("pic4"), cls: "base" },
         { label: "Counterfactual", values: cf("pic4"), cls: "cf" },
       ],
     },
     {
       series: [
-        { label: "Natural rate", values: proj(idx.map((i) => (i < t0 ? base.lurnat[i] : Y.lurnat[i - t0]))), cls: "ref" },
+        { label: "Natural rate", values: idx.map((i) => (i < t0 ? base.lurnat[i] : Y.lurnat[i - t0])), cls: "ref" },
         { label: blLabel, values: bl("lur"), cls: "base" },
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
@@ -305,7 +304,7 @@ function render(s, n, t0, base, Y, D, converged = true) {
       : {
         title: GROWTH_DIFF_TITLE,
         series: [
-          { label: "Baseline", values: proj(idx.map(() => 0)), cls: "ref" },
+          { label: "Baseline", values: idx.map(() => 0), cls: "ref" },
           { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : D.hggdp[i - t0])), cls: "cf" },
         ],
       },
@@ -398,10 +397,9 @@ function renderEdit() {
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
   const markIndex = HISTORY_Q;
   const get = (b, v) => idx.map((i) => b[v][i]);
-  const proj = (arr) => arr.map((v, k) => (k < markIndex ? null : v));
   const lr = idx.map((i) => cur.rstar[i] + cur.pitarg[i]);
   const mk = (v, ref) => {
-    const ser = ref ? [{ label: ref.label, values: proj(ref.values), cls: "ref" }] : [];
+    const ser = ref ? [{ label: ref.label, values: ref.values, cls: "ref" }] : [];
     if (edits.dirty) ser.push({ label: "SEP baseline", values: get(orig, v), cls: "base" });
     ser.push({ label: edits.dirty ? "Edited baseline" : "SEP baseline", values: get(cur, v), cls: "cf" });
     return { series: ser, editIdx: ser.length - 1, hlines: v === "rff" && s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [] };
