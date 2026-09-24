@@ -256,6 +256,8 @@ async function run() {
 
 // GDP growth: the SEP database may or may not carry a baseline path for it (see tools/export_data.py).
 const hasGrowthBase = () => meta.bvars.includes("hggdp");
+// Long-run GDP growth: the terminal value of the baseline path (the database has no separate long-run series).
+const terminal = (path) => path[path.length - 1];
 const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
 const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus baseline (pp)";
 
@@ -297,6 +299,7 @@ function render(s, n, t0, base, Y, D, converged = true) {
       ? {
         title: GROWTH_TITLE,
         series: [
+          { label: "Long-run growth", values: idx.map(() => terminal(base.hggdp)), cls: "ref" },
           { label: blLabel, values: bl("hggdp"), cls: "base" },
           { label: "Counterfactual", values: idx.map((i) => (i < t0 ? null : base.hggdp[i] + D.hggdp[i - t0])), cls: "cf" },
         ],
@@ -409,7 +412,7 @@ function renderEdit() {
     mk("pic4", { label: "Target", values: get(cur, "pitarg") }),
     mk("lur", { label: "Natural rate", values: get(cur, "lurnat") }),
     // Without a baseline for GDP growth there is nothing to edit; the panel is hidden in this mode.
-    hasGrowthBase() ? { ...mk("hggdp", null), title: GROWTH_TITLE } : { series: [], hidden: true },
+    hasGrowthBase() ? { ...mk("hggdp", { label: "Long-run growth", values: idx.map(() => terminal(cur.hggdp)) }), title: GROWTH_TITLE } : { series: [], hidden: true },
   ];
   const status = $("status");
   status.textContent = edits.dirty
