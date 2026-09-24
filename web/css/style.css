@@ -227,6 +227,17 @@ body.busy .charts { opacity: 0.6; }
 .about p { max-width: 78ch; }
 .about a { color: var(--accent); }
 .cite { font-size: 0.85rem; }
+.about sup { line-height: 0; }
+.about sup a { text-decoration: none; }
+.footnotes {
+  max-width: 78ch;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  padding-left: 1.4em;
+  margin: 14px 0;
+}
+.footnotes li { margin: 4px 0; }
+.fn-back { margin-left: 4px; }
 
 /* ---------- edit mode ---------- */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

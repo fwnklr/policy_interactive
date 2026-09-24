@@ -170,7 +170,7 @@ function syncControls() {
 
 function set(patch) {
   if (patch.vintage && patch.vintage !== state.vintage && edits?.dirty &&
-      !confirm("Changing the baseline discards your edits. Continue?")) {
+      !confirm("Changing the projection discards your edits. Continue?")) {
     syncControls();
     return;
   }
@@ -259,7 +259,7 @@ const hasGrowthBase = () => meta.bvars.includes("hggdp");
 // Long-run GDP growth: the terminal value of the baseline path (the database has no separate long-run series).
 const terminal = (path) => path[path.length - 1];
 const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
-const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus baseline (pp)";
+const GROWTH_DIFF_TITLE = "GDP growth: counterfactual minus SEP-consistent projection (pp)";
 
 function render(s, n, t0, base, Y, D, converged = true) {
   const start = t0 - HISTORY_Q, H = 4 * s.years, end = t0 + H;
@@ -269,7 +269,7 @@ function render(s, n, t0, base, Y, D, converged = true) {
   // counterfactual starts at the last data point so the line departs from history
   const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? base[v][i] : Y[v][i - t0]));
   const bl = (v) => idx.map((i) => base[v][i]);
-  const blLabel = edits?.dirty ? "Edited baseline" : "SEP baseline";
+  const blLabel = edits?.dirty ? "Edited projection" : "SEP-consistent projection";
 
   const longrun = idx.map((i) => base.rstar[i] + base.pitarg[i]);
   const panels = [
@@ -307,7 +307,7 @@ function render(s, n, t0, base, Y, D, converged = true) {
       : {
         title: GROWTH_DIFF_TITLE,
         series: [
-          { label: "Baseline", values: idx.map(() => 0), cls: "ref" },
+          { label: "SEP-consistent projection", values: idx.map(() => 0), cls: "ref" },
           { label: "Counterfactual", values: idx.map((i) => (i < t0 - 1 ? null : i < t0 ? 0 : D.hggdp[i - t0])), cls: "cf" },
         ],
       },
@@ -413,8 +413,8 @@ function renderEdit() {
   const lr = idx.map((i) => cur.rstar[i] + cur.pitarg[i]);
   const mk = (v, ref) => {
     const ser = ref ? [{ label: ref.label, values: ref.values, cls: "ref" }] : [];
-    if (edits.dirty) ser.push({ label: "SEP baseline", values: get(orig, v), cls: "base" });
-    ser.push({ label: edits.dirty ? "Edited baseline" : "SEP baseline", values: get(cur, v), cls: "cf" });
+    if (edits.dirty) ser.push({ label: "SEP-consistent projection", values: get(orig, v), cls: "base" });
+    ser.push({ label: edits.dirty ? "Edited projection" : "SEP-consistent projection", values: get(cur, v), cls: "cf" });
     return { series: ser, editIdx: ser.length - 1, hlines: v === "rff" && s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [] };
   };
   const panels = [
@@ -427,7 +427,7 @@ function renderEdit() {
   const status = $("status");
   status.textContent = edits.dirty
     ? "Baseline edited. Switch to Counterfactual to compute policy against it."
-    : "Editing mode: drag a baseline line, or change the long-run levels on the left.";
+    : "Editing mode: drag a projection line, or change the long-run levels on the left.";
   status.dataset.kind = "";
   $("proj-note").textContent = `Shaded: data before the ${s.vintage} SEP. Only projected quarters can be edited.`;
   charts.update({ labels, panels, markIndex, editable: true });
@@ -447,7 +447,7 @@ function setMode(m) {
 function downloadCsv() {
   if (!lastResult) return;
   const { labels, panels, s } = lastResult;
-  const names = ["rff", "inflation", "unemployment", hasGrowthBase() ? "GDP growth" : "GDP growth minus baseline"];
+  const names = ["rff", "inflation", "unemployment", hasGrowthBase() ? "GDP growth" : "GDP growth minus projection"];
   const cols = [];
   panels.forEach((p, k) => p.series.forEach((ser) => cols.push({ name: `${names[k]} ${ser.label}`, values: ser.values })));
   const lines = [

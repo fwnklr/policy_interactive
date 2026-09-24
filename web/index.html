@@ -4,27 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Policy Counterfactuals</title>
-<meta name="description" content="Interactive monetary policy counterfactuals in sequence space: simple rules and optimal control around Fed SEP baselines, with an effective lower bound.">
+<meta name="description" content="Interactive monetary policy counterfactuals in sequence space: simple rules and optimal control around SEP-consistent projections, with an effective lower bound.">
 <link rel="stylesheet" href="css/style.css?v=__BUILD__">
 <script type="module" src="js/app.js?v=__BUILD__"></script>
 </head>
 <body>
 <header class="site">
   <h1>Policy counterfactuals</h1>
-  <p class="lede">What would the economy have looked like under a different monetary policy? Pick an SEP
-    baseline and a model, then choose a policy rule or optimal control. Each counterfactual is
-    computed in your browser.</p>
+  <p class="lede">What would the economy have looked like under a different monetary policy? Pick an
+    SEP-consistent projection and a model, then choose a policy rule or optimal control. Each
+    counterfactual is computed in your browser.</p>
   <fieldset class="segmented modes">
     <legend class="sr">Mode</legend>
     <label><input type="radio" name="mode" value="cf" checked autocomplete="off"> Counterfactual</label>
-    <label><input type="radio" name="mode" value="edit" autocomplete="off"> Edit baseline</label>
+    <label><input type="radio" name="mode" value="edit" autocomplete="off"> Edit projection</label>
   </fieldset>
 </header>
 
 <main>
   <aside class="controls" aria-label="Scenario settings">
     <section>
-      <label class="field">Baseline (FOMC SEP)
+      <label class="field">SEP-consistent projection
         <select id="vintage"></select>
       </label>
       <label class="field">Model
@@ -86,7 +86,7 @@
     </section>
 
     <section id="edit-section" hidden>
-      <p class="hint first">Drag a baseline line up or down in the charts. Choose the brush above the charts.</p>
+      <p class="hint first">Drag a projection line up or down in the charts. Choose the brush above the charts.</p>
       <p class="sub">Long-run levels</p>
       <div class="levels">
         <label>Inflation target π* <input type="number" id="pistar" step="0.25" min="-2" max="10"></label>
@@ -95,8 +95,8 @@
         <label id="gstar-row">Long-run GDP growth <input type="number" id="gstar" step="0.25" min="-2" max="8"></label>
       </div>
       <p class="hint" id="lr-rate"></p>
-      <p class="hint">Changing a level also moves the baseline paths so they converge to it, and sets the rule intercept and the loss-function target. Changing π* keeps r* fixed, so the long-run funds rate moves with it.</p>
-      <button type="button" id="reset-base" class="ghost">Reset to SEP baseline</button>
+      <p class="hint">Changing a level also moves the projection's paths so they converge to it, and sets the rule intercept and the loss-function target. Changing π* keeps r* fixed, so the long-run funds rate moves with it.</p>
+      <button type="button" id="reset-base" class="ghost">Reset to SEP-consistent projection</button>
     </section>
 
     <section class="row">
@@ -124,7 +124,7 @@
     <p id="status" class="status">Loading data…</p>
     <div id="charts" class="charts"></div>
     <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target, natural rate
-      of unemployment and long-run GDP growth (the baseline's terminal value).</p>
+      of unemployment and long-run GDP growth (the SEP-consistent projection's terminal value).</p>
     <div class="actions">
       <button type="button" id="download" class="ghost">Download CSV</button>
       <button type="button" id="copy-link" class="ghost">Copy link to this scenario</button>
@@ -134,18 +134,52 @@
 
 <section class="about">
   <h2>How it works</h2>
-  <p>Each model is summarized by its responses to anticipated ("news") monetary policy shocks in every
-    future quarter. Stacked together, these impulse responses map any path of policy shocks into paths
-    for the economy: <i>y</i> = <i>ȳ</i> + <i>M x</i>, where <i>ȳ</i> is the SEP baseline. A policy rule
-    or the first-order conditions of optimal control under commitment pin down the shocks <i>x</i> that implement that
-    policy against the baseline. The effective lower bound turns this into a linear complementarity
-    problem, solved exactly. The counterfactual starts in the quarter of the SEP release; earlier
-    quarters are data.</p>
-  <p>Models: a linearized version of the Federal Reserve Board's FRB/US model (LINVER), the
-    Del Negro–Giannoni–Schorfheide model with finite-horizon planning (DGS-FHP), and the Smets–Wouters
-    (2007) model. In the Smets–Wouters model, unemployment is obtained from the output gap through an
-    Okun's law relation (u − u* = −0.5 × gap). Baselines: FOMC Summary of Economic Projections, extended
-    beyond the SEP horizon. GDP growth is quarterly and annualized.</p>
+  <p>Each model's response to monetary policy is summarized by its sequence-space representation, and every
+    counterfactual here — a simple rule or a fully optimal path under commitment, with or without the effective
+    lower bound — is solved using the efficient method of Hebden and Winkler.<sup><a href="#fn-hw" id="fnref-hw">1</a></sup>
+    The counterfactual starts in the quarter of the SEP release; earlier quarters are historical data.</p>
+  <p>Three models are available. The first is a linearized version of the Federal Reserve's FRB/US model
+    (LINVER),<sup><a href="#fn-linver" id="fnref-linver">2</a></sup> a large-scale estimated general-equilibrium
+    model of the U.S. economy in use at the Federal Reserve Board since 1996. The second is the DGS-FHP
+    model,<sup><a href="#fn-dgsfhp" id="fnref-dgsfhp">3</a></sup> a modified version of the model of
+    del Negro, Giannoni and Schorfheide<sup><a href="#fn-dgs" id="fnref-dgs">4</a></sup> that attenuates the
+    forward-guidance puzzle through finite-horizon planning for households; it is more sensitive to interest
+    rates than FRB/US. The third is the Smets–Wouters (2007) model,<sup><a href="#fn-sw" id="fnref-sw">5</a></sup>
+    a standard estimated New Keynesian model of the U.S. economy; in this model, unemployment is obtained from
+    the output gap through an Okun's law relation (u − u* = −0.5 × gap). Each baseline is an SEP-consistent
+    projection<sup><a href="#fn-sep" id="fnref-sep">6</a></sup> — the quarterly projection consistent with
+    that quarter's FOMC Summary of Economic Projections — extended beyond the SEP horizon; GDP growth is
+    quarterly and annualized.</p>
+  <ol class="footnotes">
+    <li id="fn-hw">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
+      space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
+      <a href="https://doi.org/10.1016/j.jedc.2025.105228">doi:10.1016/j.jedc.2025.105228</a>
+      <a href="#fnref-hw" class="fn-back" aria-label="Back to text">↩</a></li>
+    <li id="fn-linver">Brayton, F. and D. Reifschneider (2022). “LINVER: The Linear Version of FRB/US.”
+      Finance and Economics Discussion Series 2022-053, Board of Governors of the Federal Reserve System.
+      <a href="#fnref-linver" class="fn-back" aria-label="Back to text">↩</a></li>
+    <li id="fn-dgsfhp">Documented for policy use in Arias, J. E., M. Bodenstein, H. T. Chung, T. Drautzburg
+      and A. Raffo (2020). “Alternative Strategies: How Do They Work? How Might They Help?” Finance and
+      Economics Discussion Series 2020-068, Board of Governors of the Federal Reserve System.
+      <a href="#fnref-dgsfhp" class="fn-back" aria-label="Back to text">↩</a></li>
+    <li id="fn-dgs">del Negro, M., M. P. Giannoni and F. Schorfheide (2015). “Inflation in the Great
+      Recession and New Keynesian Models.” <i>American Economic Journal: Macroeconomics</i> 7(1), 168–196.
+      <a href="#fnref-dgs" class="fn-back" aria-label="Back to text">↩</a></li>
+    <li id="fn-sw">Smets, F. and R. Wouters (2007). “Shocks and Frictions in US Business Cycles: A Bayesian
+      DSGE Approach.” <i>American Economic Review</i> 97(3), 586–606.
+      <a href="#fnref-sw" class="fn-back" aria-label="Back to text">↩</a></li>
+    <li id="fn-sep">Economic projections are collected from each member of the Board of Governors and each
+      Federal Reserve Bank president four times a year, in connection with the FOMC meetings in March, June,
+      September and December. Participants provide yearly projections for the current and next two or three
+      calendar years, and for the “longer run,” of real GDP growth, the unemployment rate, and headline and
+      core PCE inflation, along with their individual assumptions for the appropriate federal funds rate.
+      Federal Reserve staff use a model-guided interpolation and extrapolation procedure, together with
+      current economic data, to build quarterly series consistent with these projections; the resulting
+      series need not represent the projections of the Committee or of any participant. The staff regularly
+      publishes these series as part of the FRB/US model package, available at
+      <a href="https://www.federalreserve.gov/econres/us-models-package.htm">federalreserve.gov/econres/us-models-package.htm</a>.
+      <a href="#fnref-sep" class="fn-back" aria-label="Back to text">↩</a></li>
+  </ol>
   <p class="cite">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
     space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
     <a href="https://doi.org/10.1016/j.jedc.2025.105228">doi:10.1016/j.jedc.2025.105228</a> ·
