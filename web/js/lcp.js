@@ -6,7 +6,7 @@
 // or out of the set at random, weighted by the size of the violation).
 // Fallback: Lemke's complementary pivoting algorithm.
 
-import { lu, luSolve, subSquare } from "./linalg.js";
+import { lu, luSolve, subSquare } from "./linalg.js?v=__BUILD__";
 
 // Small seeded PRNG (mulberry32) so results are reproducible.
 export function rng(seed = 1) {

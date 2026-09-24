@@ -1,16 +1,19 @@
 // Load exported model Jacobians and SEP baselines (see tools/export_data.py).
 
-import { mat } from "./linalg.js";
-import { prepareModel } from "./solver.js";
+import { mat } from "./linalg.js?v=__BUILD__";
+import { prepareModel } from "./solver.js?v=__BUILD__";
+
+// Replaced with the commit hash on deploy (see .github/workflows/pages.yml) so browsers never serve stale files.
+const BUILD = "?v=__BUILD__";
 
 async function fetchF32(url) {
-  const r = await fetch(url);
+  const r = await fetch(`${url}${BUILD}`);
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return new Float32Array(await r.arrayBuffer());
 }
 
 export async function loadMeta(dir) {
-  const r = await fetch(`${dir}/meta.json`);
+  const r = await fetch(`${dir}/meta.json${BUILD}`);
   if (!r.ok) throw new Error(`${dir}/meta.json: ${r.status}`);
   return r.json();
 }

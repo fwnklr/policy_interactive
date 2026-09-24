@@ -7,8 +7,8 @@
 // This is modelsolver2.m / modelsolver.py specialised to one vintage, with the
 // J*T-dimensional algebra collapsed to T x T blocks.
 
-import { mat, matmul, matTdiagMul, matvec, matTvec, lu, luSolve, rightDivide } from "./linalg.js";
-import { solveLCP } from "./lcp.js";
+import { mat, matmul, matTdiagMul, matvec, matTvec, lu, luSolve, rightDivide } from "./linalg.js?v=__BUILD__";
+import { solveLCP } from "./lcp.js?v=__BUILD__";
 
 export const T_RULE_ELB = 80;   // rules: ELB imposed over the first 80 quarters (as in the paper)
 export const OUTPUT_VARS = ["rff", "pic4", "lur", "lurnat", "xgap2"];

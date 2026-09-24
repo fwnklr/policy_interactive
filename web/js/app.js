@@ -1,6 +1,6 @@
-import { loadMeta, loadModel, loadBaselines } from "./data.js";
-import { solve, baselineWindow } from "./solver.js";
-import { LinkedCharts } from "./chart.js";
+import { loadMeta, loadModel, loadBaselines } from "./data.js?v=__BUILD__";
+import { solve, baselineWindow } from "./solver.js?v=__BUILD__";
+import { LinkedCharts } from "./chart.js?v=__BUILD__";
 
 const DATA_DIR = "data";
 const HISTORY_Q = 8;   // quarters of data shown before the projection starts
