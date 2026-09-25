@@ -368,9 +368,9 @@ function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isE
   }
   // No ELB solution: draw only the baseline and reference lines.
   if (!converged) for (const p of panels) p.series = p.series.filter((ser) => ser.cls !== "cf");
-  charts.update({ labels, panels, markIndex });
+  charts.update({ labels, panels, markIndex, asofIndex: t0 - start });
   $("proj-note").textContent =
-    `Shaded: data before ${s.startVintage}. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
+    `Dotted line: policy start (${s.startVintage}); grey: projection as of the latest update. Model: ${meta.models.find((m) => m.key === s.model).label}.`;
   return { labels, panels, s };
 }
 
@@ -484,7 +484,7 @@ function renderEdit() {
     ? "Baseline edited. Switch to Counterfactual to compute policy against it."
     : "Editing mode: drag a projection line, or change the long-run levels on the left.";
   status.dataset.kind = "";
-  $("proj-note").textContent = `Shaded: data before ${s.startVintage}. Only projected quarters can be edited.`;
+  $("proj-note").textContent = `Dotted line: policy start (${s.startVintage}); grey: projection. Only projected quarters can be edited.`;
   charts.update({ labels, panels, markIndex, editable: true });
   lastResult = { labels, panels, s };
 }

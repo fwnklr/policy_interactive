@@ -185,8 +185,9 @@ body.busy .charts { opacity: 0.6; }
 .grid { stroke: var(--grid); stroke-width: 1; }
 .axis { stroke: var(--axis); stroke-width: 1; }
 .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.history { fill: var(--wash); }
-.mark-rule { stroke: var(--axis); stroke-width: 1; }
+.projection { fill: var(--wash); }
+.proj-label { fill: var(--muted); font-size: 11px; }
+.mark-rule { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 1.5 3; stroke-linecap: round; }
 .hline { stroke: var(--muted); stroke-width: 1; }
 .hline-label { fill: var(--muted); font-size: 10px; }
 .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
