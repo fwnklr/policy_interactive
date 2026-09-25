@@ -95,7 +95,8 @@
     </section>
 
     <section id="edit-section" hidden>
-      <p class="hint first">Drag a projection line up or down in the charts. Choose the brush above the charts.</p>
+      <p class="hint first" id="editing-which"></p>
+      <p class="hint">Drag a projection line up or down in the charts. Choose the brush above the charts.</p>
       <p class="sub">Long-run levels</p>
       <div class="levels">
         <label>Inflation target π* <input type="number" id="pistar" step="0.25" min="-2" max="10"></label>
@@ -105,7 +106,10 @@
       </div>
       <p class="hint" id="lr-rate"></p>
       <p class="hint">Changing a level also moves the projection's paths so they converge to it, and sets the rule intercept and the loss-function target. Changing π* keeps r* fixed, so the long-run funds rate moves with it.</p>
-      <button type="button" id="reset-base" class="ghost">Reset to SEP-consistent projection</button>
+      <div class="edit-buttons">
+        <button type="button" id="undo-edit" class="ghost" disabled>Undo</button>
+        <button type="button" id="reset-base" class="ghost">Reset to SEP-consistent projections</button>
+      </div>
     </section>
 
     <section class="row">
@@ -130,6 +134,10 @@
         <button type="button" data-brush="6">3 years</button>
       </div>
     </div>
+    <p id="edit-notice" class="notice" hidden>Your changes are applied to all SEP projections uniformly. For example, if
+      you raise inflation in 2025 by 1 percentage point and start the simulation in 2022, policymakers already expect
+      higher inflation back then. Surprises or slow learning about user edits are not currently supported in this web
+      application.</p>
     <p id="status" class="status">Loading data…</p>
     <div id="charts" class="charts"></div>
     <p class="note"><span id="proj-note"></span> Dashed: long-run rate, inflation target, natural rate
