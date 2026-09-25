@@ -316,14 +316,14 @@ async function run() {
     const failed = meta.vintages[seq[stoppedAt]].label;
     bits.push(lastGood
       ? `No solution with the ELB was found updating to ${failed}, so the sequence stops there: the counterfactual is shown ` +
-        `through ${lastGood.label} (${lastGood.count} of ${seq.length} updates). Untick the ELB box to continue past it.`
+        `through ${lastGood.label} (${lastGood.count} of ${seq.length} dates). Untick the ELB box to continue past it.`
       : `No solution with the ELB was found at ${failed}, so no counterfactual is shown. Untick the ELB box to see the unconstrained path.`);
   } else if (s.elb_on) {
     const q = lastLcp.bindingQuarters;
     bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the final projection.` : "ELB does not bind in the final projection.");
   }
   if (usedEdit) bits.push("Using your edited projection.");
-  if (stoppedAt < 0) bits.push(seq.length > 1 ? `${seq.length} updates computed.` : "Computed.");
+  if (stoppedAt < 0) bits.push(seq.length > 1 ? `${seq.length} dates computed.` : "Computed.");
   status.textContent = bits.join(" ");
   status.dataset.kind = stoppedAt >= 0 ? "error" : "";
 }
