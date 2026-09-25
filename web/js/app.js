@@ -18,8 +18,9 @@ const LOSS_PRESETS = {
 const LAM_U_STOPS = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 
+// startVintage/endVintage default to the latest available projection (set in main() once meta is loaded).
 const DEFAULT = {
-  model: "linver_mcapwp", startVintage: "2020:Q2", endVintage: "2020:Q2", policy: "rule",
+  model: "linver_mcapwp", startVintage: "", endVintage: "", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
   lam_u: 1, lam_dr: 1,
   elb_on: true, years: 6,
@@ -29,7 +30,10 @@ const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let meta, baselines, charts, state, pending = false, lastResult = null, runToken = 0;
 let mode = "cf";        // "cf" (counterfactual) or "edit" (baseline editing, solver off)
-let edits = null;       // { vintage, base: {rff,pic4,lur,lurnat,rstar,pitarg,hggdp}, dirty } working copy of one vintage's baseline
+// Baseline edits, in calendar time, applied uniformly to EVERY SEP-consistent projection (see editedBaseline):
+//   paths: per-variable additive changes by date; lr: long-run shifts, phased in from the policy start date.
+let edits = null;       // { paths: {var: Float64Array(Nd)}, lr: {pistar, ustar, rstar, gstar} }
+let undoStack = [];     // snapshots of `edits` before each change
 let dragOrig = null;
 let brush = "2";        // "point" | quarters of the smoothing kernel (2 = 1 year, 6 = 3 years)
 const EDIT_VARS = ["rff", "pic4", "lur", "hggdp"];   // variable behind each chart panel, in edit mode
@@ -44,7 +48,7 @@ function readHash() {
     else if (typeof DEFAULT[k] === "boolean") s[k] = v === "1";
     else s[k] = v;
   }
-  if (q.has("vintage") && !q.has("start") && !q.has("end")) s.startVintage = s.endVintage = q.get("vintage");
+  if (q.has("vintage") && !q.has("startVintage") && !q.has("endVintage")) s.startVintage = s.endVintage = q.get("vintage");
   if (!meta.models.some((m) => m.key === s.model)) s.model = DEFAULT.model;
   if (!meta.vintages.some((v) => v.label === s.startVintage)) s.startVintage = DEFAULT.startVintage;
   if (!meta.vintages.some((v) => v.label === s.endVintage)) s.endVintage = s.startVintage;
@@ -58,7 +62,8 @@ function readHash() {
 function writeHash() {
   const q = new URLSearchParams();
   for (const k of Object.keys(DEFAULT)) {
-    if (state[k] === DEFAULT[k]) continue;
+    // The dates are always written, so a shared link keeps its dates when newer projections are added.
+    if (state[k] === DEFAULT[k] && k !== "startVintage" && k !== "endVintage") continue;
     q.set(k, typeof state[k] === "boolean" ? (state[k] ? "1" : "0") : state[k]);
   }
   history.replaceState(null, "", q.toString() ? `#${q}` : location.pathname + location.search);
@@ -145,10 +150,18 @@ function buildControls() {
   onRelease("lam_dr", (i) => LAM_DR_STOPS[i]);
   $("elb_on").addEventListener("change", () => set({ elb_on: $("elb_on").checked }));
   $("years").addEventListener("change", () => set({ years: Number($("years").value) }));
-  $("reset").addEventListener("click", () => { edits = null; setMode("cf"); set({ ...DEFAULT }); });
+  $("reset").addEventListener("click", () => { resetEdits(); setMode("cf"); set({ ...DEFAULT }); });
   document.querySelectorAll("input[name=mode]").forEach((r) =>
     r.addEventListener("change", () => setMode(r.value)));
-  $("reset-base").addEventListener("click", () => { edits = null; ensureEdits(); renderEdit(); syncEditPanel(); });
+  $("reset-base").addEventListener("click", () => { pushUndo(); resetEdits(); editChanged(); });
+  $("undo-edit").addEventListener("click", undoEdit);
+  document.addEventListener("keydown", (e) => {
+    if (mode === "edit" && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" &&
+        !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+      e.preventDefault();
+      undoEdit();
+    }
+  });
   for (const k of ["pistar", "ustar", "lrrate", "gstar"]) {
     $(k).addEventListener("change", () => setLevel(k, Number($(k).value)));
   }
@@ -204,12 +217,6 @@ function syncControls() {
 }
 
 function set(patch) {
-  if (patch.startVintage && patch.startVintage !== state.startVintage && edits?.dirty &&
-      !confirm("Changing the policy start date discards your edits. Continue?")) {
-    syncControls();
-    return;
-  }
-  if (patch.startVintage && patch.startVintage !== state.startVintage) edits = null;
   state = { ...state, ...patch };
   syncControls();
   writeHash();
@@ -243,7 +250,6 @@ async function run() {
 
   if (mode === "edit") {
     document.body.classList.remove("busy");
-    ensureEdits();
     syncEditPanel();
     renderEdit();
     return;
@@ -262,9 +268,9 @@ async function run() {
   let lastGood = null;   // snapshot after the latest update that solved, kept in case a later one has no ELB solution
   for (let i = 0; i < seq.length; i++) {
     const n = seq[i];
-    const isEditedStep = !!(edits?.dirty && edits.vintage === meta.vintages[n].label);
+    const isEditedStep = hasEdits();
     if (isEditedStep) usedEdit = true;
-    const full = isEditedStep ? edits.base : baselines[n];
+    const full = editedBaseline(n);
 
     let out;
     try {
@@ -322,7 +328,7 @@ async function run() {
     const q = lastLcp.bindingQuarters;
     bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the final projection.` : "ELB does not bind in the final projection.");
   }
-  if (usedEdit) bits.push("Using your edited projection.");
+  if (usedEdit) bits.push("Using your edited projections.");
   if (stoppedAt < 0) bits.push(seq.length > 1 ? `${seq.length} dates computed.` : "Computed.");
   status.textContent = bits.join(" ");
   status.dataset.kind = stoppedAt >= 0 ? "error" : "";
@@ -396,92 +402,136 @@ function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isE
 }
 
 // ---------- baseline editing ----------
-// Edit mode always targets the "Policy start date" vintage; "update through" is hidden while editing.
-function ensureEdits() {
-  if (edits && edits.vintage === state.startVintage) return;
-  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
-  const base = {};
-  for (const k of Object.keys(baselines[n])) base[k] = Float64Array.from(baselines[n][k]);
-  edits = { vintage: state.startVintage, base, dirty: false };
+// Edits live in calendar time and are applied uniformly to every SEP-consistent projection, past and future.
+// Because every projection gets the same change on the same dates, the revisions between consecutive projections
+// are untouched: the model sees the edit once, as something known from the policy start date on. Edit mode shows
+// the final projection of the chosen sequence; only quarters from the policy start date on can be edited.
+const EDIT_PATH_VARS = ["rff", "pic4", "lur", "lurnat", "rstar", "pitarg", "hggdp"];
+
+function blankEdits() {
+  const Nd = meta.dates.length, paths = {};
+  for (const v of EDIT_PATH_VARS) if (meta.bvars.includes(v)) paths[v] = new Float64Array(Nd);
+  return { paths, lr: { pistar: 0, ustar: 0, rstar: 0, gstar: 0 } };
+}
+function resetEdits() { edits = blankEdits(); }
+function cloneEdits(e) {
+  const paths = {};
+  for (const [k, a] of Object.entries(e.paths)) paths[k] = Float64Array.from(a);
+  return { paths, lr: { ...e.lr } };
+}
+function hasEdits() {
+  if (!edits) return false;
+  if (Object.values(edits.lr).some((x) => x !== 0)) return true;
+  return Object.values(edits.paths).some((a) => a.some((x) => x !== 0));
+}
+function pushUndo() { undoStack.push(cloneEdits(edits)); if (undoStack.length > 200) undoStack.shift(); }
+function undoEdit() {
+  if (!undoStack.length) return;
+  edits = undoStack.pop();
+  editChanged();
+}
+// The notice is always shown while editing (so it never appears mid-drag and shifts the charts), and in the
+// counterfactual view whenever edits are in effect.
+function syncNotice() { $("edit-notice").hidden = !(mode === "edit" || hasEdits()); }
+function editChanged() {
+  $("undo-edit").disabled = undoStack.length === 0;
+  syncNotice();
+  if (mode === "edit") { syncEditPanel(); renderEdit(); } else schedule();
 }
 
+// Long-run shifts, phased in (in calendar time) from the policy start date so paths start at the data.
+const PHASE_IN_Q = 12;
+const startT0 = () => meta.vintages.find((v) => v.label === state.startVintage).t0;
+const phase = (j, t0) => (j < t0 ? 0 : 1 - Math.exp(-(j - t0) / PHASE_IN_Q));
+
+// SEP-consistent projection n with the user's edits applied (the raw projection when there are none).
+function editedBaseline(n) {
+  const b = baselines[n];
+  if (!hasEdits()) return b;
+  const t0 = startT0(), { pistar, ustar, rstar, gstar } = edits.lr, out = {};
+  for (const k of Object.keys(b)) {
+    const src = b[k], d = edits.paths[k], a = new Float64Array(src.length);
+    for (let j = 0; j < src.length; j++) {
+      let x = src[j] + (d ? d[j] : 0);
+      if (j >= t0) {
+        const w = phase(j, t0);
+        if (k === "pitarg") x += pistar;
+        else if (k === "lurnat") x += ustar;
+        else if (k === "rstar") x += rstar;
+        else if (k === "pic4") x += pistar * w;
+        else if (k === "lur") x += ustar * w;
+        else if (k === "rff") x += (pistar + rstar) * w;
+        else if (k === "hggdp") x += gstar * w;
+      }
+      a[j] = x;
+    }
+    out[k] = a;
+  }
+  return out;
+}
+
+const finalIndex = () => meta.vintages.findIndex((v) => v.label === state.endVintage);
 function levelIndex() {
-  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
-  return Math.min(meta.dates.length - 1, meta.vintages[n].t0 + meta.T - 1);
+  return Math.min(meta.dates.length - 1, meta.vintages[finalIndex()].t0 + meta.T - 1);
 }
 
 function syncBrush() {
   document.querySelectorAll("#brush-bar button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.brush === brush));
 }
 
+// The long-run boxes show the edited final projection's values.
 function syncEditPanel() {
-  if (!edits) return;
   const i = levelIndex();
-  const b = edits.base;
+  const b = editedBaseline(finalIndex());
   $("pistar").value = String(Number(b.pitarg[i].toFixed(3)));
   $("ustar").value = String(Number(b.lurnat[i].toFixed(3)));
   $("lrrate").value = String(Number((b.rstar[i] + b.pitarg[i]).toFixed(3)));
   $("lr-rate").textContent = `Implied real neutral rate r*: ${b.rstar[i].toFixed(2)}%`;
   $("gstar-row").hidden = !hasGrowthBase();
   if (hasGrowthBase()) $("gstar").value = String(Number(terminal(b.hggdp).toFixed(3)));
+  $("editing-which").textContent = `Editing the ${state.endVintage} SEP-consistent projection; ` +
+    "your changes apply to every projection.";
 }
 
-// Change a long-run level. The reference path shifts by the full amount from the SEP date on, and the
-// baseline paths that must converge to it (inflation and the funds rate for pi*, the funds rate for r*,
-// unemployment for u*) shift by the same amount, phased in over ~3 years so they start at today's data.
-const LEVEL_REF = { pistar: "pitarg", ustar: "lurnat", rstar: "rstar" };
-const LEVEL_PATHS = { pistar: ["pic4", "rff"], ustar: ["lur"], rstar: ["rff"] };
-const PHASE_IN_Q = 12;
-
+// Change a long-run level: a shift of that projection's value, applied to all projections. Changing pi* keeps
+// r* fixed, so the long-run funds rate moves with it; entering a long-run funds rate moves r*.
 function setLevel(k, value) {
   if (!Number.isFinite(value)) return syncEditPanel();
-  ensureEdits();
-  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
-  const t0 = meta.vintages[n].t0;
-  const li = levelIndex();
-  if (k === "gstar") {   // long-run growth is the terminal value of the growth path itself; shift the path toward it
-    const g = edits.base.hggdp, d = value - terminal(g);
-    for (let j = t0; j < g.length; j++) g[j] += d * (1 - Math.exp(-(j - t0) / PHASE_IN_Q));
-    edits.dirty = true;
-    syncEditPanel();
-    renderEdit();
-    return;
-  }
-  if (k === "lrrate") { value -= edits.base.pitarg[li]; k = "rstar"; }   // nominal rate entered; r* is implied
-  const ref = edits.base[LEVEL_REF[k]];
-  const d = value - ref[li];
-  for (let j = t0; j < ref.length; j++) {
-    ref[j] += d;
-    const w = 1 - Math.exp(-(j - t0) / PHASE_IN_Q);
-    for (const v of LEVEL_PATHS[k]) edits.base[v][j] += d * w;
-  }
-  edits.dirty = true;
-  syncEditPanel();
-  renderEdit();
+  const i = levelIndex(), b = editedBaseline(finalIndex());
+  let key = k, d;
+  if (k === "pistar") d = value - b.pitarg[i];
+  else if (k === "ustar") d = value - b.lurnat[i];
+  else if (k === "lrrate") { key = "rstar"; d = value - (b.rstar[i] + b.pitarg[i]); }
+  else if (k === "gstar") d = (value - terminal(b.hggdp)) / phase(b.hggdp.length - 1, startT0());
+  if (!d) return syncEditPanel();
+  pushUndo();
+  edits.lr[key] += d;
+  editChanged();
 }
 
 function onDragStart(k) {
-  dragOrig = Float64Array.from(edits.base[EDIT_VARS[k]]);
+  pushUndo();
+  dragOrig = Float64Array.from(edits.paths[EDIT_VARS[k]]);
 }
 
 function onDrag(k, i, dv) {
-  const n = meta.vintages.findIndex((v) => v.label === state.startVintage);
-  const t0 = meta.vintages[n].t0, centre = t0 - HISTORY_Q + i;
+  const t0 = startT0(), centre = t0 - HISTORY_Q + i;
   const sigma = Number(brush);
-  const arr = edits.base[EDIT_VARS[k]];
+  const arr = edits.paths[EDIT_VARS[k]];
   for (let j = t0; j < arr.length; j++) {
     const w = brush === "point" ? (j === centre ? 1 : 0) : Math.exp(-0.5 * ((j - centre) / sigma) ** 2);
     arr[j] = dragOrig[j] + dv * (w < 1e-4 ? 0 : w);
   }
-  edits.dirty = true;
+  $("undo-edit").disabled = false;
   renderEdit();
 }
 
 function renderEdit() {
   const s = state;
-  const n = meta.vintages.findIndex((v) => v.label === s.startVintage);
-  const t0 = meta.vintages[n].t0, orig = baselines[n], cur = edits.base;
-  const start = t0 - HISTORY_Q, end = t0 + 4 * s.years;
+  const nF = finalIndex();
+  const t0 = startT0(), t0F = meta.vintages[nF].t0, orig = baselines[nF], cur = editedBaseline(nF);
+  const edited = hasEdits();
+  const start = t0 - HISTORY_Q, end = Math.min(meta.dates.length, t0F + 4 * s.years);
   const idx = [], labels = [];
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
   const markIndex = HISTORY_Q;
@@ -489,8 +539,8 @@ function renderEdit() {
   const lr = idx.map((i) => cur.rstar[i] + cur.pitarg[i]);
   const mk = (v, ref) => {
     const ser = ref ? [{ label: ref.label, values: ref.values, cls: "ref" }] : [];
-    if (edits.dirty) ser.push({ label: "SEP-consistent projection", values: get(orig, v), cls: "base" });
-    ser.push({ label: edits.dirty ? "Edited projection" : "SEP-consistent projection", values: get(cur, v), cls: "cf" });
+    if (edited) ser.push({ label: "SEP-consistent projection", values: get(orig, v), cls: "base" });
+    ser.push({ label: edited ? "Edited projection" : "SEP-consistent projection", values: get(cur, v), cls: "cf" });
     return { series: ser, editIdx: ser.length - 1, hlines: v === "rff" && s.elb_on ? [{ y: meta.elb, label: "ELB" }] : [] };
   };
   const panels = [
@@ -501,12 +551,13 @@ function renderEdit() {
     hasGrowthBase() ? { ...mk("hggdp", { label: "Long-run growth", values: idx.map(() => terminal(cur.hggdp)) }), title: GROWTH_TITLE, rangeSkip: covidQuarters(idx) } : { series: [], hidden: true },
   ];
   const status = $("status");
-  status.textContent = edits.dirty
-    ? "Baseline edited. Switch to Counterfactual to compute policy against it."
+  status.textContent = edited
+    ? "Projections edited. Switch to Counterfactual to compute policy against them."
     : "Editing mode: drag a projection line, or change the long-run levels on the left.";
   status.dataset.kind = "";
-  $("proj-note").textContent = `Dotted line: policy start (${s.startVintage}); grey: forecast. Only forecast quarters can be edited.`;
-  charts.update({ labels, panels, markIndex, editable: true });
+  $("proj-note").textContent = `Showing the ${s.endVintage} projection. Dotted line: policy start (${s.startVintage}); ` +
+    "grey: forecast. Quarters from the policy start date on can be edited.";
+  charts.update({ labels, panels, markIndex, asofIndex: t0F - start, editable: true });
   lastResult = { labels, panels, s };
 }
 
@@ -516,9 +567,9 @@ function setMode(m) {
   $("policy-section").hidden = $("elb-section").hidden = m === "edit";
   $("edit-section").hidden = m !== "edit";
   $("brush-bar").hidden = m !== "edit";
-  $("vintage-end").closest("label").hidden = m === "edit";
   $("sequence-hint").hidden = m === "edit";
-  if (m === "edit") { ensureEdits(); syncEditPanel(); }
+  syncNotice();
+  if (m === "edit") syncEditPanel();
   schedule();
 }
 
@@ -562,6 +613,9 @@ async function main() {
     { title: "Unemployment rate (%)" },
     ...(meta.bvars.includes("hggdp") ? [{ title: GROWTH_TITLE }] : []),
   ], { onDragStart, onDrag });
+  const latest = meta.vintages.reduce((a, b) => (b.year > a.year ? b : a)).label;
+  DEFAULT.startVintage = DEFAULT.endVintage = latest;
+  resetEdits();
   buildControls();
   state = readHash();
   syncControls();

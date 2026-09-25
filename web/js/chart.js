@@ -219,6 +219,7 @@ export class LinkedCharts {
       p.svg.setPointerCapture(ev.pointerId);
       this.handlers.onDragStart?.(k, i);
       this.#draw();
+      this.drag.v0 = valueAt(ev).v;   // measure the grab point on the frozen (padded) scale used while dragging
     });
     const end = () => {
       if (!this.drag) return;
