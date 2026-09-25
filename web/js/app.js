@@ -259,6 +259,7 @@ async function run() {
   const runner = createSequenceRunner(model, policy, { useElb: s.elb_on, elb: meta.elb });
 
   let lastLcp = { converged: true, bindingQuarters: 0 }, stoppedAt = -1, usedEdit = false;
+  let lastGood = null;   // snapshot after the latest update that solved, kept in case a later one has no ELB solution
   for (let i = 0; i < seq.length; i++) {
     const n = seq[i];
     const isEditedStep = !!(edits?.dirty && edits.vintage === meta.vintages[n].label);
@@ -288,8 +289,18 @@ async function run() {
 
     lastLcp = out.lcp;
     const converged = !s.elb_on || out.lcp.converged;
-    lastResult = render(s, full, meta.vintages[n].t0, out.Y, dispRange, converged, isEditedStep);
-    if (!converged) { stoppedAt = i; break; }
+    if (!converged) {
+      stoppedAt = i;
+      // Keep showing the counterfactual through the last update that did solve; only if the very first
+      // update fails is there nothing to show (baseline and reference lines only).
+      lastResult = lastGood
+        ? render(s, lastGood.full, lastGood.t0, lastGood.Y, dispRange, true, lastGood.isEditedStep)
+        : render(s, full, meta.vintages[n].t0, out.Y, dispRange, false, isEditedStep);
+      break;
+    }
+    lastResult = render(s, full, meta.vintages[n].t0, out.Y, dispRange, true, isEditedStep);
+    lastGood = { full, t0: meta.vintages[n].t0, isEditedStep, label: meta.vintages[n].label, count: i + 1,
+      Y: Object.fromEntries(Object.entries(out.Y).map(([k, a]) => [k, a.slice()])) };
 
     if (i < seq.length - 1) {
       status.textContent = `Updating through ${meta.vintages[seq[i + 1]].label}… (${i + 1} of ${seq.length})`;
@@ -302,14 +313,17 @@ async function run() {
 
   const bits = [];
   if (stoppedAt >= 0) {
-    bits.push(`No solution with the ELB was found updating to ${meta.vintages[seq[stoppedAt]].label}; the sequence ` +
-      "stops there. Untick the ELB box to see the unconstrained path.");
+    const failed = meta.vintages[seq[stoppedAt]].label;
+    bits.push(lastGood
+      ? `No solution with the ELB was found updating to ${failed}, so the sequence stops there: the counterfactual is shown ` +
+        `through ${lastGood.label} (${lastGood.count} of ${seq.length} updates). Untick the ELB box to continue past it.`
+      : `No solution with the ELB was found at ${failed}, so no counterfactual is shown. Untick the ELB box to see the unconstrained path.`);
   } else if (s.elb_on) {
     const q = lastLcp.bindingQuarters;
     bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the final projection.` : "ELB does not bind in the final projection.");
   }
   if (usedEdit) bits.push("Using your edited projection.");
-  bits.push(seq.length > 1 ? `${seq.length} updates computed.` : "Computed.");
+  if (stoppedAt < 0) bits.push(seq.length > 1 ? `${seq.length} updates computed.` : "Computed.");
   status.textContent = bits.join(" ");
   status.dataset.kind = stoppedAt >= 0 ? "error" : "";
 }
