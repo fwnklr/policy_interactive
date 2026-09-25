@@ -5,7 +5,7 @@
 //   series:    [{ label, values (number|null per point), cls, dash }]
 //   hlines:    [{ y, label }] thin horizontal reference lines (e.g. the ELB)
 //   markIndex: index of the first simulated quarter (policy start; dotted vertical rule)
-//   asofIndex: index where the grey "projection" region starts (defaults to markIndex; moves right
+//   asofIndex: index where the grey "forecast" region starts (defaults to markIndex; moves right
 //              as a sequence of updates rolls forward)
 
 const NS = "http://www.w3.org/2000/svg";
@@ -69,7 +69,7 @@ export class LinkedCharts {
 
   #draw() {
     const { labels, panels, markIndex } = this.data;
-    const asofIndex = this.data.asofIndex ?? markIndex;   // where the grey "projection" region begins
+    const asofIndex = this.data.asofIndex ?? markIndex;   // where the grey "forecast" region begins
     const n = labels.length;
     this.panels.forEach((p, k) => {
       const d = panels[k];
@@ -98,12 +98,12 @@ export class LinkedCharts {
       const y = (v) => M.top + (1 - (v - lo) / (hi - lo)) * (H - M.top - M.bottom);
       p.scale = { x, y, W, H, n, lo, hi };
 
-      // grey "projection" region (from the current update onward) + dotted rule at the policy start date
+      // grey "forecast" region (from the current update onward) + dotted rule at the policy start date
       if (asofIndex > 0 && asofIndex - 1 < n - 1) {
         const px = x(asofIndex - 1);
         el("rect", { class: "projection", x: px, y: M.top, width: W - M.right - px, height: H - M.top - M.bottom }, svg);
         const lab = el("text", { class: "proj-label", x: W - M.right - 6, y: M.top + 12, "text-anchor": "end" }, svg);
-        lab.textContent = "Projection";
+        lab.textContent = "Forecast";
       }
       if (markIndex > 0) {
         el("line", { class: "mark-rule", x1: x(markIndex - 1), x2: x(markIndex - 1), y1: M.top, y2: H - M.bottom }, svg);
