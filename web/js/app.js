@@ -18,8 +18,9 @@ const LOSS_PRESETS = {
 const LAM_U_STOPS = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 
+// startVintage/endVintage default to the latest available projection (set in main() once meta is loaded).
 const DEFAULT = {
-  model: "linver_mcapwp", startVintage: "2020:Q2", endVintage: "2020:Q2", policy: "rule",
+  model: "linver_mcapwp", startVintage: "", endVintage: "", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
   lam_u: 1, lam_dr: 1,
   elb_on: true, years: 6,
@@ -47,7 +48,7 @@ function readHash() {
     else if (typeof DEFAULT[k] === "boolean") s[k] = v === "1";
     else s[k] = v;
   }
-  if (q.has("vintage") && !q.has("start") && !q.has("end")) s.startVintage = s.endVintage = q.get("vintage");
+  if (q.has("vintage") && !q.has("startVintage") && !q.has("endVintage")) s.startVintage = s.endVintage = q.get("vintage");
   if (!meta.models.some((m) => m.key === s.model)) s.model = DEFAULT.model;
   if (!meta.vintages.some((v) => v.label === s.startVintage)) s.startVintage = DEFAULT.startVintage;
   if (!meta.vintages.some((v) => v.label === s.endVintage)) s.endVintage = s.startVintage;
@@ -61,7 +62,8 @@ function readHash() {
 function writeHash() {
   const q = new URLSearchParams();
   for (const k of Object.keys(DEFAULT)) {
-    if (state[k] === DEFAULT[k]) continue;
+    // The dates are always written, so a shared link keeps its dates when newer projections are added.
+    if (state[k] === DEFAULT[k] && k !== "startVintage" && k !== "endVintage") continue;
     q.set(k, typeof state[k] === "boolean" ? (state[k] ? "1" : "0") : state[k]);
   }
   history.replaceState(null, "", q.toString() ? `#${q}` : location.pathname + location.search);
@@ -611,6 +613,8 @@ async function main() {
     { title: "Unemployment rate (%)" },
     ...(meta.bvars.includes("hggdp") ? [{ title: GROWTH_TITLE }] : []),
   ], { onDragStart, onDrag });
+  const latest = meta.vintages.reduce((a, b) => (b.year > a.year ? b : a)).label;
+  DEFAULT.startVintage = DEFAULT.endVintage = latest;
   resetEdits();
   buildControls();
   state = readHash();
