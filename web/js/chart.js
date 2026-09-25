@@ -4,7 +4,9 @@
 //   labels:    x-axis labels ("2020:Q2"), one per point
 //   series:    [{ label, values (number|null per point), cls, dash }]
 //   hlines:    [{ y, label }] thin horizontal reference lines (e.g. the ELB)
-//   markIndex: index of the first projected quarter (drawn as a vertical rule)
+//   markIndex: index of the first simulated quarter (policy start; dotted vertical rule)
+//   asofIndex: index where the grey "forecast" region starts (defaults to markIndex; moves right
+//              as a sequence of updates rolls forward)
 
 const NS = "http://www.w3.org/2000/svg";
 const M = { top: 14, right: 14, bottom: 26, left: 40 };
@@ -33,6 +35,7 @@ export class LinkedCharts {
     this.handlers = handlers;
     this.drag = null;
     this.freeze = null;
+    this.uid = Math.random().toString(36).slice(2, 8);
     this.panels = specs.map((spec) => {
       const wrap = document.createElement("figure");
       wrap.className = "panel";
@@ -67,6 +70,7 @@ export class LinkedCharts {
 
   #draw() {
     const { labels, panels, markIndex } = this.data;
+    const asofIndex = this.data.asofIndex ?? markIndex;   // where the grey "forecast" region begins
     const n = labels.length;
     this.panels.forEach((p, k) => {
       const d = panels[k];
@@ -78,12 +82,16 @@ export class LinkedCharts {
       const H = p.box.clientHeight || 200;
       const svg = p.svg;
       svg.replaceChildren();
+      const defs = el("defs", {}, svg);
+      el("rect", { x: M.left, y: M.top - 2, width: W - M.left - M.right, height: H - M.top - M.bottom + 4 }, el("clipPath", { id: `clip-${k}-${this.uid}` }, defs));
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
       svg.setAttribute("width", W);
       svg.setAttribute("height", H);
 
       let lo = Infinity, hi = -Infinity;
-      for (const s of d.series) for (const v of s.values) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      // d.rangeSkip[i] (optional): quarters left out of the axis range, e.g. extreme outliers; their
+      // line segments are clipped at the plot edge instead.
+      for (const s of d.series) s.values.forEach((v, i) => { if (v != null && !d.rangeSkip?.[i]) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
       for (const h of d.hlines || []) { lo = Math.min(lo, h.y); hi = Math.max(hi, h.y); }
       if (hi - lo < 1) { const c = (hi + lo) / 2; lo = c - 0.5; hi = c + 0.5; }
       const step = niceStep(hi - lo, H < 180 ? 3 : 4);
@@ -95,9 +103,14 @@ export class LinkedCharts {
       const y = (v) => M.top + (1 - (v - lo) / (hi - lo)) * (H - M.top - M.bottom);
       p.scale = { x, y, W, H, n, lo, hi };
 
-      // history wash + projection start rule
+      // grey "forecast" region (from the current update onward) + dotted rule at the policy start date
+      if (asofIndex > 0 && asofIndex - 1 < n - 1) {
+        const px = x(asofIndex - 1);
+        el("rect", { class: "projection", x: px, y: M.top, width: W - M.right - px, height: H - M.top - M.bottom }, svg);
+        const lab = el("text", { class: "proj-label", x: W - M.right - 6, y: M.top + 12, "text-anchor": "end" }, svg);
+        lab.textContent = "Forecast";
+      }
       if (markIndex > 0) {
-        el("rect", { class: "history", x: M.left, y: M.top, width: x(markIndex - 1) - M.left, height: H - M.top - M.bottom }, svg);
         el("line", { class: "mark-rule", x1: x(markIndex - 1), x2: x(markIndex - 1), y1: M.top, y2: H - M.bottom }, svg);
       }
 
@@ -134,10 +147,10 @@ export class LinkedCharts {
           path += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
           pen = true;
         });
-        el("path", { d: path, class: `series ${s.cls}` }, svg);
+        el("path", { d: path, class: `series ${s.cls}`, "clip-path": `url(#clip-${k}-${this.uid})` }, svg);
       }
 
-      p.crossLayer = el("g", { class: "cross" }, svg);
+      p.crossLayer = el("g", { class: "cross", "clip-path": `url(#clip-${k}-${this.uid})` }, svg);
       p.hit = el("rect", { class: "hit", x: M.left, y: 0, width: W - M.left - M.right, height: H }, svg);
     });
     if (this.hover != null) this.#showHover(this.hover, this.hoverPanel);

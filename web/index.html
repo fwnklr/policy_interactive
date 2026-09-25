@@ -11,9 +11,11 @@
 <body>
 <header class="site">
   <h1>Policy counterfactuals</h1>
-  <p class="lede">What would the economy have looked like under a different monetary policy? Pick an
-    SEP-consistent projection and a model, then choose a policy rule or optimal control. Each
-    counterfactual is computed in your browser.</p>
+  <p class="lede">What would the economy have looked like under a different monetary policy? Pick a
+    policy start date and a model, then choose a policy rule or optimal control. Move "update
+    projection through" forward to see the counterfactual updated as each subsequent SEP-consistent
+    projection arrived, exactly as it would have been decided in real time. Each counterfactual is
+    computed in your browser.</p>
   <fieldset class="segmented modes">
     <legend class="sr">Mode</legend>
     <label><input type="radio" name="mode" value="cf" checked autocomplete="off"> Counterfactual</label>
@@ -24,9 +26,13 @@
 <main>
   <aside class="controls" aria-label="Scenario settings">
     <section>
-      <label class="field">SEP-consistent projection
-        <select id="vintage"></select>
+      <label class="field">Policy start date
+        <select id="vintage-start"></select>
       </label>
+      <label class="field">Update projection through
+        <select id="vintage-end"></select>
+      </label>
+      <p class="hint" id="sequence-hint"></p>
       <label class="field">Model
         <select id="model"></select>
       </label>
@@ -150,6 +156,7 @@
     projection<sup><a href="#fn-sep" id="fnref-sep">6</a></sup> — the quarterly projection consistent with
     that quarter's FOMC Summary of Economic Projections — extended beyond the SEP horizon; GDP growth is
     quarterly and annualized.</p>
+  <p class="cite"><a href="https://github.com/fwnklr/policy_interactive">Source code</a></p>
   <ol class="footnotes">
     <li id="fn-hw">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
       space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
@@ -180,10 +187,6 @@
       <a href="https://www.federalreserve.gov/econres/us-models-package.htm">federalreserve.gov/econres/us-models-package.htm</a>.
       <a href="#fnref-sep" class="fn-back" aria-label="Back to text">↩</a></li>
   </ol>
-  <p class="cite">Hebden, J. and F. Winkler (2026). “Computation of policy counterfactuals in sequence
-    space.” <i>Journal of Economic Dynamics and Control</i> 182, 105228.
-    <a href="https://doi.org/10.1016/j.jedc.2025.105228">doi:10.1016/j.jedc.2025.105228</a> ·
-    <a href="https://github.com/fwnklr/policy_interactive">Source code</a></p>
 </section>
 </body>
 </html>
