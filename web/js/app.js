@@ -326,8 +326,10 @@ const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
 function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isEditedStep = false) {
   const labels = [], idx = [];
   for (let i = start; i < end; i++) { idx.push(i); labels.push(quarterLabel(meta.dates[i])); }
-  // counterfactual starts at the last data point so the line departs from history
-  const cf = (v) => idx.map((i) => (i < t0 - 1 ? null : i < t0 ? full[v][i] : Y[v][i]));
+  // The counterfactual always runs from the policy start (jumping off the last data point before it):
+  // the quarters already rolled through show what was committed, later ones this update's projection.
+  const t0First = start + markIndex;
+  const cf = (v) => idx.map((i) => (i < t0First - 1 ? null : i < t0First ? full[v][i] : Y[v][i]));
   const bl = (v) => idx.map((i) => full[v][i]);
   const blLabel = isEditedStep ? "Edited projection" : "SEP-consistent projection";
 
@@ -350,7 +352,7 @@ function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isE
     },
     {
       series: [
-        { label: "Natural rate", values: idx.map((i) => (i < t0 ? full.lurnat[i] : Y.lurnat[i])), cls: "ref" },
+        { label: "Natural rate", values: idx.map((i) => (i < t0First ? full.lurnat[i] : Y.lurnat[i])), cls: "ref" },
         { label: blLabel, values: bl("lur"), cls: "base" },
         { label: "Counterfactual", values: cf("lur"), cls: "cf" },
       ],
