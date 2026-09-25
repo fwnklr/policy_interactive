@@ -65,7 +65,7 @@ body {
 }
 h1, h2, h3 { line-height: 1.2; margin: 0; }
 
-header.site, main, .about {
+header.site, main, .about, .disclaimer {
   max-width: 1180px;
   margin: 0 auto;
   padding: 0 16px;
@@ -259,3 +259,6 @@ body.busy .charts { opacity: 0.6; }
 .brush { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 0.85rem; color: var(--ink-2); }
 .brush .presets { margin: 0; }
 .brush[hidden] { display: none; }
+
+.disclaimer { padding-top: 12px; padding-bottom: 32px; color: var(--ink-2); font-size: 0.8rem; }
+.disclaimer p { margin: 0; padding-top: 12px; border-top: 1px solid var(--grid); }
