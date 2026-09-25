@@ -318,6 +318,9 @@ async function run() {
 const hasGrowthBase = () => meta.bvars.includes("hggdp");
 // Long-run GDP growth: the terminal value of the baseline path (the database has no separate long-run series).
 const terminal = (path) => path[path.length - 1];
+// 2020:Q2 and Q3 GDP growth (about -30% and +30% annualized) would swamp the axis, so the growth panel
+// leaves them out of its y-range; the lines are clipped at the plot edge there.
+const covidQuarters = (idx) => idx.map((i) => Math.abs(meta.dates[i] - 2020.25) < 1e-9 || Math.abs(meta.dates[i] - 2020.5) < 1e-9);
 const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
 
 // full: the CURRENT step's own baseline (real or, for the one edited vintage, edited) -- used for the
@@ -362,6 +365,7 @@ function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isE
   if (hasGrowthBase()) {
     panels.push({
       title: GROWTH_TITLE,
+      rangeSkip: covidQuarters(idx),
       series: [
         { label: "Long-run growth", values: idx.map(() => terminal(full.hggdp)), cls: "ref" },
         { label: blLabel, values: bl("hggdp"), cls: "base" },
@@ -480,7 +484,7 @@ function renderEdit() {
     mk("pic4", { label: "Target", values: get(cur, "pitarg") }),
     mk("lur", { label: "Natural rate", values: get(cur, "lurnat") }),
     // Without a baseline for GDP growth there is nothing to edit; the panel is hidden in this mode.
-    hasGrowthBase() ? { ...mk("hggdp", { label: "Long-run growth", values: idx.map(() => terminal(cur.hggdp)) }), title: GROWTH_TITLE } : { series: [], hidden: true },
+    hasGrowthBase() ? { ...mk("hggdp", { label: "Long-run growth", values: idx.map(() => terminal(cur.hggdp)) }), title: GROWTH_TITLE, rangeSkip: covidQuarters(idx) } : { series: [], hidden: true },
   ];
   const status = $("status");
   status.textContent = edits.dirty

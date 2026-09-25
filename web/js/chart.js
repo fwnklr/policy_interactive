@@ -35,6 +35,7 @@ export class LinkedCharts {
     this.handlers = handlers;
     this.drag = null;
     this.freeze = null;
+    this.uid = Math.random().toString(36).slice(2, 8);
     this.panels = specs.map((spec) => {
       const wrap = document.createElement("figure");
       wrap.className = "panel";
@@ -81,12 +82,16 @@ export class LinkedCharts {
       const H = p.box.clientHeight || 200;
       const svg = p.svg;
       svg.replaceChildren();
+      const defs = el("defs", {}, svg);
+      el("rect", { x: M.left, y: M.top - 2, width: W - M.left - M.right, height: H - M.top - M.bottom + 4 }, el("clipPath", { id: `clip-${k}-${this.uid}` }, defs));
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
       svg.setAttribute("width", W);
       svg.setAttribute("height", H);
 
       let lo = Infinity, hi = -Infinity;
-      for (const s of d.series) for (const v of s.values) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      // d.rangeSkip[i] (optional): quarters left out of the axis range, e.g. extreme outliers; their
+      // line segments are clipped at the plot edge instead.
+      for (const s of d.series) s.values.forEach((v, i) => { if (v != null && !d.rangeSkip?.[i]) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
       for (const h of d.hlines || []) { lo = Math.min(lo, h.y); hi = Math.max(hi, h.y); }
       if (hi - lo < 1) { const c = (hi + lo) / 2; lo = c - 0.5; hi = c + 0.5; }
       const step = niceStep(hi - lo, H < 180 ? 3 : 4);
@@ -142,10 +147,10 @@ export class LinkedCharts {
           path += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
           pen = true;
         });
-        el("path", { d: path, class: `series ${s.cls}` }, svg);
+        el("path", { d: path, class: `series ${s.cls}`, "clip-path": `url(#clip-${k}-${this.uid})` }, svg);
       }
 
-      p.crossLayer = el("g", { class: "cross" }, svg);
+      p.crossLayer = el("g", { class: "cross", "clip-path": `url(#clip-${k}-${this.uid})` }, svg);
       p.hit = el("rect", { class: "hit", x: M.left, y: 0, width: W - M.left - M.right, height: H }, svg);
     });
     if (this.hover != null) this.#showHover(this.hover, this.hoverPanel);
