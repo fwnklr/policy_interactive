@@ -249,6 +249,7 @@ async function run() {
     return;
   }
 
+  document.body.classList.remove("busy");   // don't dim the charts while a sequence animates
   const seq = vintageSequence(s.startVintage, s.endVintage);
   const t0First = meta.vintages[seq[0]].t0, t0Final = meta.vintages[seq.at(-1)].t0;
   const dispRange = { start: t0First - HISTORY_Q, end: Math.min(meta.dates.length, t0Final + 4 * s.years), markIndex: HISTORY_Q };
