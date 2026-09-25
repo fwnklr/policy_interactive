@@ -32,7 +32,7 @@ Requires the replication package next to this folder (`../replication`) and
 python3 tools/export_data.py               # writes web/data/
 python3 tools/make_reference.py            # single-vintage test cases (replication Python solver)
 python3 tools/make_reference_sequence.py   # multi-vintage (sequential-updating) test cases
-python3 -m http.server 8765                # then open:
+python3 tools/serve.py 8765                      # dev server without caching; then open:
 #   http://localhost:8765/tools/test/check.html            (single vintage, web/js/solver.js `solve`)
 #   http://localhost:8765/tools/test/check_sequence.html   (multi-vintage, `createSequenceRunner`)
 ```
