@@ -70,8 +70,7 @@ header.site, main, .about, .disclaimer {
   margin: 0 auto;
   padding: 0 16px;
 }
-header.site { padding-top: 24px; padding-bottom: 8px; }
-header.site h1 { font-size: 1.6rem; font-weight: 650; }
+header.site { padding-top: 16px; padding-bottom: 8px; }
 .lede { color: var(--ink-2); margin: 8px 0 0; }
 .lede a { color: var(--accent); }
 
