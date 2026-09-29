@@ -20,7 +20,7 @@ const LAM_DR_STOPS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 // startVintage/endVintage default to the latest available projection (set in main() once meta is loaded).
 const DEFAULT = {
-  model: "linver_mcapwp", startVintage: "", endVintage: "", policy: "rule",
+  model: "dgs_fhp", startVintage: "", endVintage: "", policy: "rule",
   rho: 0, phi_pi: 1.5, phi_u: 1, phi_du: 0,
   lam_u: 1, lam_dr: 1,
   elb_on: true, years: 6,
