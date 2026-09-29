@@ -330,10 +330,18 @@ async function run() {
 const hasGrowthBase = () => meta.bvars.includes("hggdp");
 // Long-run GDP growth: the terminal value of the baseline path (the database has no separate long-run series).
 const terminal = (path) => path[path.length - 1];
-// 2020:Q2 and Q3 GDP growth (about -30% and +30% annualized) would swamp the axis, so the growth panel
-// leaves them out of its y-range; the lines are clipped at the plot edge there.
-const covidQuarters = (idx) => idx.map((i) => Math.abs(meta.dates[i] - 2020.25) < 1e-9 || Math.abs(meta.dates[i] - 2020.5) < 1e-9);
-const GROWTH_TITLE = "GDP growth (%, quarterly annualized)";
+// The solver and the edits work with quarterly annualized growth (hggdp); the panel shows four-quarter growth,
+// the average of the last four annualized quarterly rates (equal to the sum of the four quarterly rates).
+const avg4 = (a) => Float64Array.from(a, (_, i) => {
+  let s = 0, n = 0;
+  for (let k = Math.max(0, i - 3); k <= i; k++) { s += a[k]; n++; }
+  return s / n;
+});
+const withG4 = (b) => ({ ...b, hggdp: avg4(b.hggdp) });
+// 2020:Q2 (about -33% annualized) and Q3 (+30%) make every four-quarter window that contains them (2020:Q2 to
+// 2021:Q2) an outlier, so the growth panel leaves those quarters out of its y-range; lines are clipped at the edge.
+const covidQuarters = (idx) => idx.map((i) => meta.dates[i] > 2020.25 - 1e-9 && meta.dates[i] < 2021.25 + 1e-9);
+const GROWTH_TITLE = "GDP growth (%, four-quarter)";
 
 // full: the CURRENT step's own baseline (real or, for the one edited vintage, edited) -- used for the
 // gray "SEP-consistent projection" line and the dashed reference lines, which are this vintage's own view.
@@ -375,13 +383,14 @@ function render(s, full, t0, Y, { start, end, markIndex }, converged = true, isE
     },
   ];
   if (hasGrowthBase()) {
+    const g4 = avg4(full.hggdp), gY = avg4(Y.hggdp);
     panels.push({
       title: GROWTH_TITLE,
       rangeSkip: covidQuarters(idx),
       series: [
         { label: "Long-run growth", values: idx.map(() => terminal(full.hggdp)), cls: "ref" },
-        { label: blLabel, values: bl("hggdp"), cls: "base" },
-        { label: "Counterfactual", values: cf("hggdp"), cls: "cf" },
+        { label: blLabel, values: idx.map((i) => g4[i]), cls: "base" },
+        { label: "Counterfactual", values: idx.map((i) => (i < t0First - 1 ? null : i < t0First ? g4[i] : gY[i])), cls: "cf" },
       ],
     });
   }
@@ -510,8 +519,13 @@ function onDrag(k, i, dv) {
   const t0 = startT0(), centre = t0 - HISTORY_Q + i;
   const sigma = Number(brush);
   const arr = edits.paths[EDIT_VARS[k]];
+  // The growth panel shows a four-quarter average of the edited quarterly series, so the bump is placed
+  // 1.5 quarters earlier (a single point becomes four quarters) and the displayed line follows the cursor.
+  const g = EDIT_VARS[k] === "hggdp";
   for (let j = t0; j < arr.length; j++) {
-    const w = brush === "point" ? (j === centre ? 1 : 0) : Math.exp(-0.5 * ((j - centre) / sigma) ** 2);
+    const w = brush === "point"
+      ? (g ? (j <= centre && j > centre - 4 ? 1 : 0) : (j === centre ? 1 : 0))
+      : Math.exp(-0.5 * ((j - (g ? centre - 1.5 : centre)) / sigma) ** 2);
     arr[j] = dragOrig[j] + dv * (w < 1e-4 ? 0 : w);
   }
   $("undo-edit").disabled = false;
@@ -521,7 +535,7 @@ function onDrag(k, i, dv) {
 function renderEdit() {
   const s = state;
   const nF = finalIndex();
-  const t0 = startT0(), t0F = meta.vintages[nF].t0, orig = baselines[nF], cur = editedBaseline(nF);
+  const t0 = startT0(), t0F = meta.vintages[nF].t0, orig = withG4(baselines[nF]), cur = withG4(editedBaseline(nF));
   const edited = hasEdits();
   const start = t0 - HISTORY_Q, end = Math.min(meta.dates.length, t0F + 4 * s.years);
   const idx = [], labels = [];
