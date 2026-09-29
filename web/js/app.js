@@ -187,10 +187,6 @@ function syncControls() {
   $("model").value = state.model;
   $("vintage-start").value = state.startVintage;
   $("vintage-end").value = state.endVintage;
-  const seq = vintageSequence(state.startVintage, state.endVintage);
-  $("sequence-hint").textContent = seq.length > 1
-    ? `${seq.length} SEP releases: the counterfactual updates as each one arrives, animated ${STEP_DELAY_MS / 1000}s apart.`
-    : "";
   document.querySelectorAll("input[name=policy]").forEach((r) => { r.checked = r.value === state.policy; });
   $("rule-controls").hidden = state.policy !== "rule";
   $("loss-controls").hidden = state.policy !== "commitment";
@@ -264,7 +260,7 @@ async function run() {
     : { type: "commitment", lam_u: s.lam_u, lam_dr: s.lam_dr };
   const runner = createSequenceRunner(model, policy, { useElb: s.elb_on, elb: meta.elb });
 
-  let lastLcp = { converged: true, bindingQuarters: 0 }, stoppedAt = -1, usedEdit = false;
+  let stoppedAt = -1, usedEdit = false;
   let lastGood = null;   // snapshot after the latest update that solved, kept in case a later one has no ELB solution
   for (let i = 0; i < seq.length; i++) {
     const n = seq[i];
@@ -293,7 +289,6 @@ async function run() {
       return;
     }
 
-    lastLcp = out.lcp;
     const converged = !s.elb_on || out.lcp.converged;
     if (!converged) {
       stoppedAt = i;
@@ -324,9 +319,6 @@ async function run() {
       ? `No solution with the ELB was found updating to ${failed}, so the sequence stops there: the counterfactual is shown ` +
         `through ${lastGood.label} (${lastGood.count} of ${seq.length} dates). Untick the ELB box to continue past it.`
       : `No solution with the ELB was found at ${failed}, so no counterfactual is shown. Untick the ELB box to see the unconstrained path.`);
-  } else if (s.elb_on) {
-    const q = lastLcp.bindingQuarters;
-    bits.push(q ? `ELB binds in ${q} quarter${q > 1 ? "s" : ""} of the final projection.` : "ELB does not bind in the final projection.");
   }
   if (usedEdit) bits.push("Using your edited projections.");
   if (stoppedAt < 0) bits.push(seq.length > 1 ? `${seq.length} dates computed.` : "Computed.");
@@ -567,7 +559,6 @@ function setMode(m) {
   $("policy-section").hidden = $("elb-section").hidden = m === "edit";
   $("edit-section").hidden = m !== "edit";
   $("brush-bar").hidden = m !== "edit";
-  $("sequence-hint").hidden = m === "edit";
   syncNotice();
   if (m === "edit") syncEditPanel();
   schedule();
