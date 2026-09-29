@@ -52,6 +52,20 @@
         <p class="formula"><span>r<sub>t</sub> = ρ r<sub>t−1</sub></span> <span>+ (1−ρ)(r* + π*)</span>
           <span>+ φ<sub>π</sub>(π<sub>t</sub> − π*)</span> <span>− φ<sub>u</sub>(u<sub>t</sub> − u*<sub>t</sub>)</span>
           <span>− φ<sub>Δu</sub>(u<sub>t</sub> − u<sub>t−4</sub>)</span></p>
+        <details class="symbols">
+          <summary>What do the symbols mean?</summary>
+          <dl>
+            <dt>r<sub>t</sub></dt><dd>federal funds rate in quarter t (%)</dd>
+            <dt>π<sub>t</sub></dt><dd>inflation, the four-quarter change in the PCE price index (%)</dd>
+            <dt>u<sub>t</sub></dt><dd>unemployment rate (%); <i>u*<sub>t</sub></i> is the natural rate of unemployment</dd>
+            <dt>π*</dt><dd>the inflation target</dd>
+            <dt>r*</dt><dd>the real neutral interest rate, so r* + π* is the long-run level of the funds rate</dd>
+            <dt>ρ</dt><dd>inertia: how much of last quarter's rate carries over (0 = none, 1 = the rule only changes the rate)</dd>
+            <dt>φ<sub>π</sub></dt><dd>response to inflation above target</dd>
+            <dt>φ<sub>u</sub></dt><dd>response to unemployment above its natural rate</dd>
+            <dt>φ<sub>Δu</sub></dt><dd>response to the change in unemployment over the past four quarters</dd>
+          </dl>
+        </details>
         <div class="presets" id="rule-presets" role="group" aria-label="Rule presets"></div>
         <label class="slider">
           <span><span>Inertia ρ</span> <output id="rho-out"></output></span>
@@ -75,6 +89,18 @@
         <p class="formula"><span>min Σ<sub>t</sub> β<sup>t</sup> [ (π<sub>t</sub> − π*)<sup>2</sup></span>
           <span>+ λ<sub>u</sub>(u<sub>t</sub> − u*<sub>t</sub>)<sup>2</sup></span>
           <span>+ λ<sub>Δr</sub>(r<sub>t</sub> − r<sub>t−1</sub>)<sup>2</sup> ]</span></p>
+        <details class="symbols">
+          <summary>What do the symbols mean?</summary>
+          <dl>
+            <dt>min Σ<sub>t</sub></dt><dd>the policymaker chooses the funds rate path that minimizes the total loss over all future quarters t</dd>
+            <dt>β</dt><dd>discount factor: how much later quarters count relative to earlier ones (fixed at 0.9963)</dd>
+            <dt>π<sub>t</sub>, π*</dt><dd>inflation (four-quarter PCE) and the inflation target</dd>
+            <dt>u<sub>t</sub>, u*<sub>t</sub></dt><dd>unemployment rate and the natural rate of unemployment</dd>
+            <dt>r<sub>t</sub></dt><dd>federal funds rate in quarter t, so r<sub>t</sub> − r<sub>t−1</sub> is its change</dd>
+            <dt>λ<sub>u</sub></dt><dd>weight on unemployment gaps, relative to inflation gaps (whose weight is 1)</dd>
+            <dt>λ<sub>Δr</sub></dt><dd>weight on changes in the funds rate, relative to inflation gaps</dd>
+          </dl>
+        </details>
         <div class="presets" id="loss-presets" role="group" aria-label="Loss presets"></div>
         <label class="slider">
           <span><span>Unemployment weight λ<sub>u</sub></span> <output id="lam_u-out"></output></span>

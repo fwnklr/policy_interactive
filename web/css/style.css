@@ -269,3 +269,9 @@ body.busy .charts { opacity: 0.6; }
   margin: 0 0 10px; padding: 8px 12px; font-size: 0.85rem; color: var(--ink);
   background: var(--wash); border-left: 3px solid var(--ref); border-radius: 4px;
 }
+
+.symbols { margin: -4px 0 10px; font-size: 0.8rem; color: var(--ink-2); }
+.symbols summary { cursor: pointer; }
+.symbols dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; margin: 8px 0 0; }
+.symbols dt { font-family: "Times New Roman", Times, serif; font-style: italic; color: var(--ink); white-space: nowrap; }
+.symbols dd { margin: 0; }
