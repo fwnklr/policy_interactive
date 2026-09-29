@@ -6,7 +6,7 @@ Hebden, J. and F. Winkler (2026), "Computation of policy counterfactuals in sequ
 *Journal of Economic Dynamics and Control* 182, 105228. https://doi.org/10.1016/j.jedc.2025.105228
 
 Pick a policy start date and a model, choose a simple interest-rate rule or optimal control,
-set the rule coefficients or loss weights, and toggle the effective lower bound. Move "update
+set the rule coefficients or loss-function penalties, and toggle the effective lower bound. Move "update
 projection through" forward to see the counterfactual sequentially updated as each subsequent
 SEP-consistent projection arrives — honoring whatever was already committed, exactly as the
 paper's recursive revision scheme prescribes (Section 5) — animated one step at a time.

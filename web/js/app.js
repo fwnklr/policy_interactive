@@ -12,7 +12,7 @@ const RULE_PRESETS = {
   FD: { label: "First difference", rho: 1, phi_pi: 0.5, phi_u: 0, phi_du: 0.5 },
 };
 const LOSS_PRESETS = {
-  equal: { label: "Equal weights", lam_u: 1, lam_dr: 1 },
+  equal: { label: "Equal penalties", lam_u: 1, lam_dr: 1 },
   inflation: { label: "Inflation focus", lam_u: 0, lam_dr: 0.01 },
 };
 const LAM_U_STOPS = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 10];
@@ -283,7 +283,7 @@ async function run() {
     if (bad) {
       status.textContent = s.policy === "rule"
         ? "These settings produce an explosive path. Try a stronger response to inflation."
-        : "These settings produce an explosive path. Try a larger rate-change weight.";
+        : "These settings produce an explosive path. Try a larger rate-change penalty.";
       status.dataset.kind = "error";
       document.body.classList.remove("busy");
       return;

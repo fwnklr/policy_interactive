@@ -60,7 +60,7 @@
             <dt>u<sub>t</sub></dt><dd>unemployment rate (%); <i>u*<sub>t</sub></i> is the natural rate of unemployment</dd>
             <dt>π*</dt><dd>the inflation target</dd>
             <dt>r*</dt><dd>the real neutral interest rate, so r* + π* is the long-run level of the funds rate</dd>
-            <dt>ρ</dt><dd>inertia: how much of last quarter's rate carries over (0 = none, 1 = the rule only changes the rate)</dd>
+            <dt>ρ</dt><dd>coefficient on the lagged policy rate: how much of last quarter's rate carries over (0 = none, 1 = the rule only changes the rate)</dd>
             <dt>φ<sub>π</sub></dt><dd>response to inflation above target</dd>
             <dt>φ<sub>u</sub></dt><dd>response to unemployment above its natural rate</dd>
             <dt>φ<sub>Δu</sub></dt><dd>response to the change in unemployment over the past four quarters</dd>
@@ -68,7 +68,7 @@
         </details>
         <div class="presets" id="rule-presets" role="group" aria-label="Rule presets"></div>
         <label class="slider">
-          <span><span>Inertia ρ</span> <output id="rho-out"></output></span>
+          <span><span>Lagged policy rate ρ</span> <output id="rho-out"></output></span>
           <input type="range" id="rho" min="0" max="1" step="0.01">
         </label>
         <label class="slider">
@@ -97,20 +97,20 @@
             <dt>π<sub>t</sub>, π*</dt><dd>inflation (four-quarter PCE) and the inflation target</dd>
             <dt>u<sub>t</sub>, u*<sub>t</sub></dt><dd>unemployment rate and the natural rate of unemployment</dd>
             <dt>r<sub>t</sub></dt><dd>federal funds rate in quarter t, so r<sub>t</sub> − r<sub>t−1</sub> is its change</dd>
-            <dt>λ<sub>u</sub></dt><dd>weight on unemployment gaps, relative to inflation gaps (whose weight is 1)</dd>
-            <dt>λ<sub>Δr</sub></dt><dd>weight on changes in the funds rate, relative to inflation gaps</dd>
+            <dt>λ<sub>u</sub></dt><dd>penalty on unemployment gaps, relative to inflation gaps (whose penalty is 1)</dd>
+            <dt>λ<sub>Δr</sub></dt><dd>penalty on changes in the funds rate, relative to inflation gaps</dd>
           </dl>
         </details>
         <div class="presets" id="loss-presets" role="group" aria-label="Loss presets"></div>
         <label class="slider">
-          <span><span>Unemployment weight λ<sub>u</sub></span> <output id="lam_u-out"></output></span>
+          <span><span>Unemployment penalty λ<sub>u</sub></span> <output id="lam_u-out"></output></span>
           <input type="range" id="lam_u" min="0" step="1">
         </label>
         <label class="slider">
-          <span><span>Rate-change weight λ<sub>Δr</sub></span> <output id="lam_dr-out"></output></span>
+          <span><span>Rate-change penalty λ<sub>Δr</sub></span> <output id="lam_dr-out"></output></span>
           <input type="range" id="lam_dr" min="0" step="1">
         </label>
-        <p class="hint">Weight on inflation normalized to 1; discount factor β = 0.9963. The policymaker optimizes at the SEP date
+        <p class="hint">Penalty on inflation normalized to 1; discount factor β = 0.9963. The policymaker optimizes at the SEP date
           under commitment: a path for the funds rate that is never revisited.</p>
       </div>
     </section>
