@@ -35,14 +35,15 @@ BVARS = ["rff", "pic4", "lur", "lurnat", "xgap2", "rstar", "pitarg"]
 # every vintage exported; until then the web page shows the counterfactual growth response only.
 OPTIONAL_BVARS = ["hggdp"]
 
+# Order here is the order of the model dropdown on the page.
 MODELS = {
-    "linver_mcapwp": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER)"},
-    # TEST ONLY (local branch): LINVER with the effects of policy scaled: inflation x10; unemployment, the output
-    # gap and GDP growth x2.
-    "linver_steep": {"file": "runmod_mcapwp_results.mat", "label": "LINVER steep",
-                     "scale": {"pic4": 10.0, "lur": 2.0, "xgap2": 2.0, "hggdp": 2.0}},
     "dgs_fhp": {"file": "dgs_fhp_irfoc_1PC_results.mat", "label": "DGS-FHP"},
     "sw": {"file": "sw_results.mat", "label": "Smets\u2013Wouters (2007)"},
+    "linver_mcapwp": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER)"},
+    # Illustrative variant: LINVER's responses to policy, with the inflation responses multiplied by 10 and the
+    # unemployment, output-gap and GDP-growth responses by 2 (see the footnote on the page).
+    "linver_steep": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER), steep",
+                     "scale": {"pic4": 10.0, "lur": 2.0, "xgap2": 2.0, "hggdp": 2.0}},
 }
 
 # Baselines: one database (data/sep_data.mat), one entry per SEP vintage.  Vintage labels are unique.

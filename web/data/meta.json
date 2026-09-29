@@ -23,16 +23,6 @@
  "beta": 0.9963,
  "models": [
   {
-   "key": "linver_mcapwp",
-   "label": "FRB/US (LINVER)",
-   "file": "M_linver_mcapwp.bin"
-  },
-  {
-   "key": "linver_steep",
-   "label": "LINVER steep",
-   "file": "M_linver_steep.bin"
-  },
-  {
    "key": "dgs_fhp",
    "label": "DGS-FHP",
    "file": "M_dgs_fhp.bin"
@@ -41,6 +31,16 @@
    "key": "sw",
    "label": "Smets\u2013Wouters (2007)",
    "file": "M_sw.bin"
+  },
+  {
+   "key": "linver_mcapwp",
+   "label": "FRB/US (LINVER)",
+   "file": "M_linver_mcapwp.bin"
+  },
+  {
+   "key": "linver_steep",
+   "label": "FRB/US (LINVER), steep",
+   "file": "M_linver_steep.bin"
   }
  ],
  "dates": [
