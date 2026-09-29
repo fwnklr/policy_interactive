@@ -37,6 +37,10 @@ OPTIONAL_BVARS = ["hggdp"]
 
 MODELS = {
     "linver_mcapwp": {"file": "runmod_mcapwp_results.mat", "label": "FRB/US (LINVER)"},
+    # TEST ONLY (local branch): LINVER with the effects of policy scaled: inflation x10; unemployment, the output
+    # gap and GDP growth x2.
+    "linver_steep": {"file": "runmod_mcapwp_results.mat", "label": "LINVER steep",
+                     "scale": {"pic4": 10.0, "lur": 2.0, "xgap2": 2.0, "hggdp": 2.0}},
     "dgs_fhp": {"file": "dgs_fhp_irfoc_1PC_results.mat", "label": "DGS-FHP"},
     "sw": {"file": "sw_results.mat", "label": "Smets\u2013Wouters (2007)"},
 }
@@ -64,7 +68,7 @@ def export_models(meta):
         M = np.zeros((len(MVARS), T, T))
         for j, v in enumerate(MVARS):
             for s in range(T):
-                M[j, :, s] = irfs[f"{v}_epsfwrd{s}"][:T]
+                M[j, :, s] = irfs[f"{v}_epsfwrd{s}"][:T] * m.get("scale", {}).get(v, 1.0)
         fname = f"M_{key}.bin"
         M.astype("<f4").tofile(os.path.join(OUT, fname))
         meta["models"].append({"key": key, "label": m["label"], "file": fname})
