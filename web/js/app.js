@@ -128,8 +128,7 @@ function buildControls() {
   model.addEventListener("change", () => set({ model: model.value }));
   $("vintage-start").addEventListener("change", () => {
     const startVintage = $("vintage-start").value;
-    const endVintage = vintageYear(state.endVintage) < vintageYear(startVintage) ? startVintage : state.endVintage;
-    set({ startVintage, endVintage });
+    set({ startVintage, endVintage: startVintage });
   });
   $("vintage-end").addEventListener("change", () => {
     const v = $("vintage-end").value;
